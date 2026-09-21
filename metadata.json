@@ -1,0 +1,6 @@
+{
+  "name": "BACE Prep Lab",
+  "description": "Comprehensive learning platform and exam preparation system for Wagner High School Biomedical CTE students, serving as a supplement to PLTW training for the Biotechnician Assistant Credentialing Exam (BACE).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
