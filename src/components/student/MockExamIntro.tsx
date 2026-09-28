@@ -11,6 +11,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { BACE_CURRENT_TOTAL_QUESTIONS, BACE_CURRENT_TIME_MINUTES } from '../../data/baceBlueprint';
 
 export const MockExamIntro: React.FC = () => {
   const { startMockExam, domains } = useApp();
@@ -39,11 +40,11 @@ export const MockExamIntro: React.FC = () => {
     {
       id: 'full' as const,
       title: 'Full BACE Simulation',
-      questions: 100,
+      questions: BACE_CURRENT_TOTAL_QUESTIONS,
       timeLimit: '4 Hours (240 Min)',
-      minutes: 240,
-      description: 'Official test blueprint replica. 100 questions covering all 8 BACE domains with strict time and review tracking.',
-      badge: 'Official Simulation',
+      minutes: BACE_CURRENT_TIME_MINUTES,
+      description: 'Current-format 124-question simulation covering all 8 BACE domains, weighted to the published category point distribution with strict time and review tracking.',
+      badge: 'Current Format',
     },
   ];
 
