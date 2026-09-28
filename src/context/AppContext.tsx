@@ -1463,16 +1463,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     department?: string;
     initial_class_name?: string;
   }): TeacherProfile => {
-    const res = registerTeacher({
-      prefix: data.prefix,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      school_name: data.school_name,
-      department: data.department,
-      initial_class_name: data.initial_class_name,
+    const id = `roster_teacher_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const teacher: TeacherProfile = {
+      id,
+      prefix: data.prefix?.trim() || undefined,
+      first_name: data.first_name.trim(),
+      last_name: data.last_name.trim(),
+      email: data.email.trim().toLowerCase(),
+      school_name: data.school_name.trim(),
+      department: data.department?.trim() || 'CTE Biomedical Science',
+      created_at: new Date().toISOString(),
+    };
+
+    setTeachers((prev) => {
+      const updated = [teacher, ...prev];
+      localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(updated));
+      return updated;
     });
-    return res.teacher || DEFAULT_EMPTY_TEACHER;
+
+    if (data.initial_class_name?.trim()) {
+      const newClass: SchoolClass = {
+        id: `cls_${Date.now().toString(36)}`,
+        name: data.initial_class_name.trim(),
+        teacher_id: id,
+        school_year: '2025-2026',
+        period: 'Period 1',
+        join_code: `BACE${Math.floor(1000 + Math.random() * 9000)}`,
+        created_at: new Date().toISOString(),
+      };
+      setClasses((prev) => {
+        const updated = [newClass, ...prev];
+        localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(updated));
+        return updated;
+      });
+    }
+
+    return teacher;
   };
 
   const updateTeacherAccount = (id: string, updates: Partial<TeacherProfile>) => {
@@ -1499,30 +1525,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     target_exam_date?: string;
     readiness?: number;
   }): StudentOverview => {
-    const res = registerStudent({
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
+    const id = `roster_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const readiness = data.readiness ?? 0;
+    const student: StudentOverview = {
+      profile: {
+        id,
+        first_name: data.first_name.trim(),
+        last_name: data.last_name.trim(),
+        email: data.email.trim().toLowerCase(),
+        role: 'student',
+        class_id: data.class_id,
+        school_name: data.school_name,
+        target_exam_date: data.target_exam_date,
+        created_at: new Date().toISOString(),
+      },
       class_id: data.class_id,
-      target_exam_date: data.target_exam_date,
-      school_name: data.school_name,
-    });
-    return res.student || DEFAULT_EMPTY_STUDENT;
-  };
+      overall_readiness: readiness,
+      domain_mastery: {},
+      last_active: new Date().toISOString(),
+      status: readiness >= 80 ? 'Ready' : readiness >= 70 ? 'Developing' : 'Needs Review',
+      lessons_completed: 0,
+      questions_attempted: 0,
+      accuracy: 0,
+      mock_exam_scores: [],
+      weakest_topics: [],
+      strongest_topics: [],
+      recent_activities: [],
+    };
 
-  const createTestStudent = (data: {
-    first_name: string;
-    last_name: string;
-    class_id: string;
-    readiness?: number;
-  }): StudentOverview => {
-    return createStudentAccount({
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: `${data.first_name.toLowerCase()}.${data.last_name.toLowerCase()}@school.edu`,
-      class_id: data.class_id,
-      readiness: data.readiness || 0,
+    setStudents((prev) => {
+      const updated = [student, ...prev];
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
+      return updated;
     });
+
+    return student;
   };
 
   const updateStudentAccount = (id: string, updates: Partial<StudentOverview>) => {
