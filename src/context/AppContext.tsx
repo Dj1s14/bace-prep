@@ -898,20 +898,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [lessonGrades, environment]);
 
-  useEffect(() => {
-    if (currentUser) {
-      saveEnvData(environment, 'auth_user', currentUser);
-      if (environment === 'production') {
-        localStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(currentUser));
-      }
-    } else {
-      removeEnvData(environment, 'auth_user');
-      if (environment === 'production') {
-        localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
-      }
-    }
-  }, [currentUser, environment]);
-
+  // Authenticated identity is restored only from the Supabase session.
+  // Do not persist an unsigned app-level user object as an authentication session.
   // Active student resolver
   const currentStudent: StudentOverview = React.useMemo(() => {
     if (currentUser && currentUser.role === 'student') {
