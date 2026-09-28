@@ -1958,8 +1958,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } else {
       setActiveExamConfig({
-        title: 'Full BACE Simulation — 100 Questions',
-        totalQuestions: 100,
+        title: 'Full BACE Simulation — 124 Questions',
+        totalQuestions: 124,
         timeLimitMinutes: 240,
         quizType: 'mock_full',
       });
