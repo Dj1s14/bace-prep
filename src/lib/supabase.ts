@@ -3,7 +3,10 @@ import { Question, Assignment, LessonGradeRecord } from '../types/database';
 
 // Safe environment variable resolution with fallback to user's provided credentials
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+export const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  '';
 
 let supabaseClient: SupabaseClient | null = null;
 
