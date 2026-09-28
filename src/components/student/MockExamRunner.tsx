@@ -15,6 +15,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Question, QuizAttempt } from '../../types/database';
 import { cleanQuestionText } from '../../utils/questionUtils';
+import { allocateQuestionsByPointWeight } from '../../data/baceBlueprint';
 
 export const MockExamRunner: React.FC = () => {
   const {
