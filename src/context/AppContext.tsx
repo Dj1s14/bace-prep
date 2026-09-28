@@ -670,14 +670,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Primary authenticated user
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
 
-  const [role, setRoleState] = useState<UserRole>(() => {
-    if (currentUser?.role) return currentUser.role;
-    return (localStorage.getItem(STORAGE_KEYS.ROLE) as UserRole) || 'student';
-  });
+  const [role, setRoleState] = useState<UserRole>('student');
 
   const [studentPage, setStudentPageState] = useState<StudentNavPage>('dashboard');
   const [teacherPage, setTeacherPageState] = useState<TeacherNavPage>('dashboard');
   const [adminPage, setAdminPageState] = useState<AdminNavPage>('dashboard');
+
+  // Remove credentials created by the retired browser-local authentication system.
+  useEffect(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER_CREDENTIALS);
+      localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+    } catch {}
+  }, []);
 
   // Faculty Authorization Key State
   const [facultyAccessCode, setFacultyAccessCodeState] = useState<string>(() => {
