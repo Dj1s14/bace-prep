@@ -76,7 +76,7 @@ export const AuthPortal: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // Handle Student Registration
-  const handleStudentSignUp = (e: React.FormEvent) => {
+  const handleStudentSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -94,7 +94,7 @@ export const AuthPortal: React.FC = () => {
     }
 
     setLoading(true);
-    const res = registerStudent({
+    const res = await registerStudent({
       first_name: sFirstName.trim(),
       last_name: sLastName.trim(),
       email: sEmail.trim(),
@@ -110,7 +110,7 @@ export const AuthPortal: React.FC = () => {
   };
 
   // Handle Faculty Registration (Decoupled from mandatory class creation)
-  const handleTeacherSignUp = (e: React.FormEvent) => {
+  const handleTeacherSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -132,7 +132,7 @@ export const AuthPortal: React.FC = () => {
     }
 
     setLoading(true);
-    const res = registerTeacher({
+    const res = await registerTeacher({
       prefix: tPrefix,
       first_name: tFirstName.trim(),
       last_name: tLastName.trim(),
@@ -150,7 +150,7 @@ export const AuthPortal: React.FC = () => {
   };
 
   // Handle Administrator Registration
-  const handleAdminSignUp = (e: React.FormEvent) => {
+  const handleAdminSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -172,7 +172,7 @@ export const AuthPortal: React.FC = () => {
     }
 
     setLoading(true);
-    const res = registerAdmin({
+    const res = await registerAdmin({
       first_name: aFirstName.trim(),
       last_name: aLastName.trim(),
       email: aEmail.trim(),
@@ -189,7 +189,7 @@ export const AuthPortal: React.FC = () => {
   };
 
   // Handle Sign In (Student, Teacher, or Admin)
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -204,7 +204,7 @@ export const AuthPortal: React.FC = () => {
     }
 
     setLoading(true);
-    const res = loginUser(loginEmail.trim(), loginPassword, activePortal);
+    const res = await loginUser(loginEmail.trim(), loginPassword, activePortal);
     setLoading(false);
 
     if (!res.success && res.error) {

@@ -107,7 +107,7 @@ interface AppContextType {
     class_join_code?: string;
     target_exam_date?: string;
     school_name?: string;
-  }) => { success: boolean; error?: string; student?: StudentOverview };
+  }) => Promise<{ success: boolean; error?: string; student?: StudentOverview }>;
   registerTeacher: (data: {
     prefix?: string;
     first_name: string;
@@ -119,7 +119,7 @@ interface AppContextType {
     initial_class_name?: string;
     period?: string;
     access_code?: string;
-  }) => { success: boolean; error?: string; teacher?: TeacherProfile };
+  }) => Promise<{ success: boolean; error?: string; teacher?: TeacherProfile }>;
   registerAdmin: (data: {
     first_name: string;
     last_name: string;
@@ -128,8 +128,8 @@ interface AppContextType {
     school_name?: string;
     department?: string;
     access_code?: string;
-  }) => { success: boolean; error?: string; profile?: Profile };
-  loginUser: (email: string, password?: string, preferredRole?: UserRole) => { success: boolean; error?: string };
+  }) => Promise<{ success: boolean; error?: string; profile?: Profile }>;
+  loginUser: (email: string, password?: string, preferredRole?: UserRole) => Promise<{ success: boolean; error?: string }>;
   signOut: () => void;
 
   // Faculty Access Code Security
@@ -668,39 +668,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const demoModeEnabled = environment === 'demo';
 
   // Primary authenticated user
-  const [currentUser, setCurrentUser] = useState<Profile | null>(() => {
-    try {
-      const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-      const saved = localStorage.getItem(getEnvStorageKey(env, 'auth_user'));
-      if (saved) return JSON.parse(saved);
-      if (env === 'production') {
-        const legacy = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
-        if (legacy) {
-          const user: Profile = JSON.parse(legacy);
-          if (
-            user.id !== 'stu_demo_wagner_jordan' &&
-            user.id !== 'tch_demo_wagner_martinez' &&
-            user.id !== 'stu_alex' &&
-            user.id !== 't_vance'
-          ) {
-            return user;
-          }
-        }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
 
-  const [role, setRoleState] = useState<UserRole>(() => {
-    if (currentUser?.role) return currentUser.role;
-    return (localStorage.getItem(STORAGE_KEYS.ROLE) as UserRole) || 'student';
-  });
+  const [role, setRoleState] = useState<UserRole>('student');
 
   const [studentPage, setStudentPageState] = useState<StudentNavPage>('dashboard');
   const [teacherPage, setTeacherPageState] = useState<TeacherNavPage>('dashboard');
   const [adminPage, setAdminPageState] = useState<AdminNavPage>('dashboard');
+
+  // Remove credentials created by the retired browser-local authentication system.
+  useEffect(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER_CREDENTIALS);
+      localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+    } catch {}
+  }, []);
 
   // Faculty Authorization Key State
   const [facultyAccessCode, setFacultyAccessCodeState] = useState<string>(() => {
@@ -916,20 +898,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [lessonGrades, environment]);
 
-  useEffect(() => {
-    if (currentUser) {
-      saveEnvData(environment, 'auth_user', currentUser);
-      if (environment === 'production') {
-        localStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(currentUser));
-      }
-    } else {
-      removeEnvData(environment, 'auth_user');
-      if (environment === 'production') {
-        localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
-      }
-    }
-  }, [currentUser, environment]);
-
+  // Authenticated identity is restored only from the Supabase session.
+  // Do not persist an unsigned app-level user object as an authentication session.
   // Active student resolver
   const currentStudent: StudentOverview = React.useMemo(() => {
     if (currentUser && currentUser.role === 'student') {
@@ -1120,55 +1090,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Google Supabase Auth Listeners & Actions
+  // Supabase Auth is the single source of truth for production identity.
+  // Privileged roles must already exist in public.profiles; new authenticated
+  // users are provisioned as students only.
+  const hydrateSupabaseUser = async (user: any) => {
+    const sb = getSupabase();
+    if (!sb || !user) return;
+
+    const email = (user.email || '').trim().toLowerCase();
+    const metadata = user.user_metadata || {};
+    const fullName = metadata.full_name || metadata.name || email.split('@')[0] || 'Student User';
+    const nameParts = fullName.trim().split(/\s+/);
+    const fallbackProfile: Profile = {
+      id: user.id,
+      email,
+      first_name: metadata.first_name || nameParts[0] || 'Student',
+      last_name: metadata.last_name || nameParts.slice(1).join(' ') || 'User',
+      role: 'student',
+      school_name: metadata.school_name || 'Biotechnology & Life Sciences Academy',
+      target_exam_date: metadata.target_exam_date,
+      class_id: metadata.class_id,
+      created_at: user.created_at || new Date().toISOString(),
+    };
+
+    let profile: Profile = fallbackProfile;
+    try {
+      const { data: existingProfile, error: selectError } = await sb
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (selectError) throw selectError;
+
+      if (existingProfile) {
+        profile = {
+          ...fallbackProfile,
+          ...existingProfile,
+          id: user.id,
+          email: existingProfile.email || email,
+          role: (existingProfile.role || 'student') as UserRole,
+        };
+      } else {
+        // Never self-provision teacher/admin from browser input or OAuth metadata.
+        const studentProfile = { ...fallbackProfile, role: 'student' as UserRole };
+        const { error: insertError } = await sb.from('profiles').insert(studentProfile);
+        if (insertError) console.warn('Unable to create Supabase profile:', insertError.message);
+        profile = studentProfile;
+      }
+    } catch (err) {
+      console.warn('Profile hydration failed; using authenticated student fallback.', err);
+      profile = fallbackProfile;
+    }
+
+    const googleInfo: GoogleUserInfo = {
+      id: user.id,
+      email: profile.email,
+      name: `${profile.first_name} ${profile.last_name}`.trim(),
+      avatar_url: metadata.avatar_url,
+      role: profile.role,
+    };
+
+    setGoogleUser(googleInfo);
+    setCurrentUser(profile);
+    setRole(profile.role);
+
+    if (profile.role === 'student') {
+      setActiveStudentId(profile.id);
+      setStudentPage('dashboard');
+    } else if (profile.role === 'teacher') {
+      setActiveTeacherId(profile.id);
+      setTeacherPage('dashboard');
+    } else {
+      setAdminPage('dashboard');
+    }
+  };
+
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) return;
 
+    let mounted = true;
+
     sb.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       if (session?.user) {
-        const email = session.user.email || '';
-        const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email.split('@')[0];
-        const userInfo: GoogleUserInfo = {
-          id: session.user.id,
-          email,
-          name,
-          avatar_url: session.user.user_metadata?.avatar_url,
-          role: 'student',
-        };
-        setGoogleUser(userInfo);
+        void hydrateSupabaseUser(session.user);
+      } else {
+        setCurrentUser(null);
+        setGoogleUser(null);
       }
     });
 
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
       if (session?.user) {
-        const email = session.user.email || '';
-        const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email.split('@')[0];
-        const userInfo: GoogleUserInfo = {
-          id: session.user.id,
-          email,
-          name,
-          avatar_url: session.user.user_metadata?.avatar_url,
-          role: 'student',
-        };
-        setGoogleUser(userInfo);
+        void hydrateSupabaseUser(session.user);
       } else {
+        setCurrentUser(null);
         setGoogleUser(null);
       }
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  const signInWithGoogle = async (preferredRole: UserRole = 'student'): Promise<{ success: boolean; error?: string }> => {
+  const signInWithGoogle = async (_preferredRole: UserRole = 'student'): Promise<{ success: boolean; error?: string }> => {
     const sb = getSupabase();
     if (!sb) {
-      const defaultName = preferredRole === 'student' ? 'Student Candidate' : preferredRole === 'teacher' ? 'Faculty Instructor' : 'Administrator';
-      const defaultEmail = preferredRole === 'student' ? 'candidate@biotechprep.edu' : preferredRole === 'teacher' ? 'instructor@biotechprep.edu' : 'admin@biotechprep.edu';
-      oneClickGoogleSignIn(defaultEmail, defaultName, preferredRole);
-      return { success: true };
+      return { success: false, error: 'Supabase authentication is not configured.' };
     }
 
     try {
@@ -1180,113 +1213,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
       });
 
-      if (error) {
-        setIsGoogleAuthLoading(false);
-        return { success: false, error: error.message };
-      }
-
-      setIsGoogleAuthLoading(false);
+      if (error) return { success: false, error: error.message };
       return { success: true };
     } catch (err: any) {
-      setIsGoogleAuthLoading(false);
       return { success: false, error: err?.message || 'Google OAuth failed' };
+    } finally {
+      setIsGoogleAuthLoading(false);
     }
   };
 
   const oneClickGoogleSignIn = (email: string, name: string, preferredRole: UserRole) => {
-    const userInfo: GoogleUserInfo = {
-      id: `google_${Date.now().toString(36)}`,
-      email,
-      name,
-      role: preferredRole,
-    };
-    setGoogleUser(userInfo);
-    localStorage.setItem('bace_google_user', JSON.stringify(userInfo));
-
-    const nameParts = name.split(' ');
-    const firstName = nameParts[0] || 'User';
-    const lastName = nameParts.slice(1).join(' ') || 'Account';
-
-    if (preferredRole === 'student') {
-      const existing = students.find((s) => s.profile.email.toLowerCase() === email.toLowerCase());
-      if (existing) {
-        setActiveStudentId(existing.profile.id);
-        setCurrentUser(existing.profile);
-      } else {
-        const newStu = createStudentAccount({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          class_id: classes[0]?.id || 'cls_biotech_1',
-          readiness: 0,
-        });
-        setActiveStudentId(newStu.profile.id);
-        setCurrentUser(newStu.profile);
-      }
-      setRole('student');
-      setStudentPage('dashboard');
-    } else if (preferredRole === 'teacher') {
-      const existing = teachers.find((t) => t.email.toLowerCase() === email.toLowerCase());
-      if (existing) {
-        setActiveTeacherId(existing.id);
-        setCurrentUser({
-          id: existing.id,
-          first_name: existing.first_name,
-          last_name: existing.last_name,
-          email: existing.email,
-          role: 'teacher',
-          school_name: existing.school_name,
-          department: existing.department,
-          created_at: existing.created_at,
-        });
-      } else {
-        const newTch = createTeacherAccount({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          school_name: 'Biotechnology & Life Sciences Academy',
-          department: 'CTE Biomedical Science',
-        });
-        setActiveTeacherId(newTch.id);
-        setCurrentUser({
-          id: newTch.id,
-          first_name: newTch.first_name,
-          last_name: newTch.last_name,
-          email: newTch.email,
-          role: 'teacher',
-          school_name: newTch.school_name,
-          department: newTch.department,
-          created_at: newTch.created_at,
-        });
-      }
-      setRole('teacher');
-      setTeacherPage('dashboard');
-    } else if (preferredRole === 'admin') {
-      const clean = email.trim().toLowerCase();
-      // Enforce strict identity verification for Google SSO administrator access
-      if (clean === 'dcjones1441@gmail.com' || clean === 'admin.cte@wagner-cte.org') {
-        const isDerrick = clean === 'dcjones1441@gmail.com';
-        const adminProfile: Profile = {
-          id: isDerrick ? 'adm_dcjones' : 'admin_root',
-          first_name: isDerrick ? 'Derrick' : firstName,
-          last_name: isDerrick ? 'Jones' : lastName,
-          email,
-          role: 'admin',
-          school_name: 'Wagner High School',
-          department: 'Biomedical CTE Administration & Leadership',
-          created_at: new Date().toISOString(),
-        };
-        setCurrentUser(adminProfile);
-        setRole('admin');
-        setAdminPage('dashboard');
-      } else {
-        // Non-authorized emails cannot obtain administrator privileges via Google SSO
-        console.warn('Unauthorized Google SSO attempt for administrator role:', email);
-        return;
-      }
+    if (environment !== 'demo') {
+      console.warn('Instant Google login is disabled outside the demo environment.');
+      return;
     }
 
-    setIsAuthModalOpen(false);
+    const parts = name.trim().split(/\s+/);
+    const profile: Profile = {
+      id: `demo_google_${Date.now().toString(36)}`,
+      email: email.trim().toLowerCase(),
+      first_name: parts[0] || 'Demo',
+      last_name: parts.slice(1).join(' ') || 'User',
+      role: preferredRole,
+      created_at: new Date().toISOString(),
+    };
+    setGoogleUser({ id: profile.id, email: profile.email, name, role: preferredRole });
+    setCurrentUser(profile);
+    setRole(preferredRole);
   };
 
   const signOutGoogle = async () => {
@@ -1302,8 +1255,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('bace_google_user');
   };
 
-  // Student Registration with Multi-Tenancy Data Segregation
-  const registerStudent = (data: {
+  // Student registration is handled by Supabase Auth. Passwords never enter localStorage.
+  const registerStudent = async (data: {
     first_name: string;
     last_name: string;
     email: string;
@@ -1312,87 +1265,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     class_join_code?: string;
     target_exam_date?: string;
     school_name?: string;
-  }): { success: boolean; error?: string; student?: StudentOverview } => {
-    const cleanEmail = data.email.trim().toLowerCase();
-    if (students.some((s) => s.profile.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: 'An account with this candidate email already exists. Please sign in.' };
+  }): Promise<{ success: boolean; error?: string; student?: StudentOverview }> => {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase authentication is not configured.' };
+    if (!data.password || data.password.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters.' };
     }
 
-    let matchedClass = data.class_id
+    const cleanEmail = data.email.trim().toLowerCase();
+    const matchedClass = data.class_id
       ? classes.find((c) => c.id === data.class_id)
       : classes.find((c) => c.join_code?.toUpperCase() === data.class_join_code?.trim().toUpperCase());
-    const classId = matchedClass?.id || data.class_id || classes[0]?.id || 'cls_biotech_1';
-    const schoolName = data.school_name || matchedClass?.name || 'Biotechnology & Life Sciences Academy';
 
-    const id = `stu_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
-    const newProfile: Profile = {
-      id,
-      first_name: data.first_name.trim(),
-      last_name: data.last_name.trim(),
+    const { data: authData, error } = await sb.auth.signUp({
       email: cleanEmail,
-      role: 'student',
-      school_name: schoolName,
-      target_exam_date: data.target_exam_date || 'May 12, 2026',
-      class_id: classId,
-      created_at: new Date().toISOString(),
-    };
-
-    const domainMastery: Record<string, number> = {};
-    domains.forEach((d) => {
-      domainMastery[d.id] = 0;
+      password: data.password,
+      options: {
+        data: {
+          first_name: data.first_name.trim(),
+          last_name: data.last_name.trim(),
+          role: 'student',
+          class_id: matchedClass?.id || data.class_id || undefined,
+          school_name: data.school_name || matchedClass?.name || undefined,
+          target_exam_date: data.target_exam_date || undefined,
+        },
+      },
     });
 
-    const newStudent: StudentOverview = {
-      profile: newProfile,
-      class_id: classId,
-      overall_readiness: 0,
-      domain_mastery: domainMastery,
-      last_active: 'Just registered',
-      status: 'Needs Review',
-      lessons_completed: 0,
-      questions_attempted: 0,
-      accuracy: 0,
-      mock_exam_scores: [],
-      weakest_topics: [],
-      strongest_topics: [],
-      recent_activities: [
-        {
-          type: 'Registration',
-          description: 'Official candidate account registered for BACE credential preparation',
-          date: 'Just now',
-        },
-      ],
-    };
+    if (error) return { success: false, error: error.message };
 
-    if (data.password) {
-      try {
-        const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-        creds[cleanEmail] = {
-          id,
-          password: data.password,
-          role: 'student',
-          profile: newProfile,
-        };
-        localStorage.setItem(STORAGE_KEYS.USER_CREDENTIALS, JSON.stringify(creds));
-      } catch (e) {
-        console.warn('Error saving credentials', e);
-      }
+    // When email confirmation is enabled, the authenticated session will be
+    // established after confirmation and hydrateSupabaseUser will create the profile.
+    if (authData.user && authData.session) {
+      await hydrateSupabaseUser(authData.user);
     }
 
-    const updatedStudents = [newStudent, ...students];
-    setStudents(updatedStudents);
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updatedStudents));
-
-    setActiveStudentId(id);
-    setCurrentUser(newProfile);
-    setRole('student');
-    setStudentPage('dashboard');
-
-    return { success: true, student: newStudent };
+    return { success: true };
   };
 
   // Faculty Registration
-  const registerTeacher = (data: {
+  const registerTeacher = async (_data: {
     prefix?: string;
     first_name: string;
     last_name: string;
@@ -1403,97 +1315,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     initial_class_name?: string;
     period?: string;
     access_code?: string;
-  }): { success: boolean; error?: string; teacher?: TeacherProfile } => {
-    const cleanEmail = data.email.trim().toLowerCase();
-    if (teachers.some((t) => t.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: 'A faculty console with this institutional email already exists. Please sign in.' };
-    }
-
-    // Role-based Access Restriction: Students cannot create teacher accounts without authorized faculty key
-    const isAuthorizedAdmin = currentUser?.role === 'admin';
-    if (!isAuthorizedAdmin) {
-      const enteredCode = (data.access_code || '').trim().toUpperCase();
-      const validCodes = getValidFacultyAccessCodes();
-      if (facultyAccessCode) validCodes.push(facultyAccessCode.trim().toUpperCase());
-
-      if (!enteredCode || !validCodes.includes(enteredCode)) {
-        return {
-          success: false,
-          error:
-            `Access Denied: Invalid Faculty Authorization Key. Student candidates are prohibited from creating faculty educator consoles. Please enter the authorized faculty key provided by your CTE Department Head or Administrator (Default Wagner CTE key: ${DEFAULT_FACULTY_ACCESS_CODE}).`,
-        };
-      }
-    }
-
-    const id = `t_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
-    const newTeacher: TeacherProfile = {
-      id,
-      prefix: data.prefix?.trim() || undefined,
-      first_name: data.first_name.trim(),
-      last_name: data.last_name.trim(),
-      email: cleanEmail,
-      school_name: data.school_name.trim(),
-      department: data.department?.trim() || 'CTE Biomedical Science',
-      created_at: new Date().toISOString(),
+  }): Promise<{ success: boolean; error?: string; teacher?: TeacherProfile }> => {
+    return {
+      success: false,
+      error: 'Teacher accounts must be provisioned by an administrator in Supabase. Client-side faculty access codes are no longer accepted.',
     };
-
-    const newProfile: Profile = {
-      id,
-      prefix: newTeacher.prefix,
-      first_name: newTeacher.first_name,
-      last_name: newTeacher.last_name,
-      email: cleanEmail,
-      role: 'teacher',
-      school_name: newTeacher.school_name,
-      department: newTeacher.department,
-      created_at: newTeacher.created_at,
-    };
-
-    if (data.password) {
-      try {
-        const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-        creds[cleanEmail] = {
-          id,
-          password: data.password,
-          role: 'teacher',
-          profile: newProfile,
-        };
-        localStorage.setItem(STORAGE_KEYS.USER_CREDENTIALS, JSON.stringify(creds));
-      } catch (e) {
-        console.warn('Error saving credentials', e);
-      }
-    }
-
-    const updatedTeachers = [newTeacher, ...teachers];
-    setTeachers(updatedTeachers);
-    localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(updatedTeachers));
-
-    if (data.initial_class_name?.trim()) {
-      const classId = `cls_${Date.now().toString(36)}`;
-      const newClass: SchoolClass = {
-        id: classId,
-        name: data.initial_class_name.trim(),
-        teacher_id: id,
-        school_year: '2025-2026',
-        period: data.period || 'Period 1',
-        join_code: `BACE${Math.floor(1000 + Math.random() * 9000)}`,
-        created_at: new Date().toISOString(),
-      };
-      const updatedClasses = [newClass, ...classes];
-      setClasses(updatedClasses);
-      localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(updatedClasses));
-    }
-
-    setActiveTeacherId(id);
-    setCurrentUser(newProfile);
-    setRole('teacher');
-    setTeacherPage('dashboard');
-
-    return { success: true, teacher: newTeacher };
   };
 
   // Administrator Registration
-  const registerAdmin = (data: {
+  const registerAdmin = async (_data: {
     first_name: string;
     last_name: string;
     email: string;
@@ -1501,208 +1331,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     school_name?: string;
     department?: string;
     access_code?: string;
-  }): { success: boolean; error?: string; profile?: Profile } => {
-    const cleanEmail = data.email.trim().toLowerCase();
-
-    // Check admin authorization key
-    const enteredCode = (data.access_code || '').trim().toUpperCase();
-    const validCodes = getValidAdminAccessCodes();
-    if (!enteredCode || !validCodes.includes(enteredCode)) {
-      return {
-        success: false,
-        error: `Access Denied: Invalid Administrator Authorization Key. Please enter an authorized admin master key (Default Wagner Admin key: ${DEFAULT_ADMIN_ACCESS_CODE}).`,
-      };
-    }
-
-    const id = `adm_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
-    const newProfile: Profile = {
-      id,
-      first_name: data.first_name.trim(),
-      last_name: data.last_name.trim(),
-      email: cleanEmail,
-      role: 'admin',
-      school_name: data.school_name?.trim() || 'Wagner High School',
-      department: data.department?.trim() || 'Biomedical CTE Administration & Leadership',
-      created_at: new Date().toISOString(),
+  }): Promise<{ success: boolean; error?: string; profile?: Profile }> => {
+    return {
+      success: false,
+      error: 'Administrator accounts must be provisioned directly in Supabase. Client-side admin master keys are no longer accepted.',
     };
-
-    if (data.password) {
-      try {
-        const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-        creds[cleanEmail] = {
-          id,
-          password: data.password,
-          role: 'admin',
-          profile: newProfile,
-        };
-        localStorage.setItem(STORAGE_KEYS.USER_CREDENTIALS, JSON.stringify(creds));
-      } catch (e) {
-        console.warn('Error saving credentials', e);
-      }
-    }
-
-    setCurrentUser(newProfile);
-    setRole('admin');
-    setAdminPage('dashboard');
-
-    return { success: true, profile: newProfile };
   };
 
-  // Unified Smart Sign In (Student, Teacher, or Admin directly from the same portal)
-  const loginUser = (
+  // Unified sign-in delegates credential verification to Supabase Auth.
+  const loginUser = async (
     email: string,
     password?: string,
     _preferredRole?: UserRole
-  ): { success: boolean; error?: string } => {
+  ): Promise<{ success: boolean; error?: string }> => {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase authentication is not configured.' };
+
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) {
-      return { success: false, error: 'Email address is required.' };
+    if (!cleanEmail || !password) {
+      return { success: false, error: 'Email and password are required.' };
     }
 
-    let credsRecord: any = null;
-    try {
-      const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-      credsRecord = creds[cleanEmail];
-    } catch (e) {
-      console.warn('Error reading credentials', e);
-    }
+    const { data, error } = await sb.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
 
-    // 1. If stored credentials exist, verify password and route directly to their side of the program
-    if (credsRecord) {
-      if (credsRecord.password && password && credsRecord.password !== password) {
-        return { success: false, error: 'Incorrect password. Please check your password and try again.' };
-      }
+    if (error) return { success: false, error: error.message };
+    if (!data.user) return { success: false, error: 'Supabase did not return an authenticated user.' };
 
-      if (credsRecord.role === 'admin') {
-        setCurrentUser(credsRecord.profile);
-        setRole('admin');
-        setAdminPage('dashboard');
-        return { success: true };
-      }
-
-      if (credsRecord.role === 'teacher') {
-        setActiveTeacherId(credsRecord.id || credsRecord.profile.id);
-        setCurrentUser(credsRecord.profile);
-        setRole('teacher');
-        setTeacherPage('dashboard');
-        return { success: true };
-      }
-
-      // Default role is student candidate
-      setActiveStudentId(credsRecord.id || credsRecord.profile.id);
-      setCurrentUser(credsRecord.profile);
-      setRole('student');
-      setStudentPage('dashboard');
-      return { success: true };
-    }
-
-    // 2. Check Administrator pre-authorized emails (Derrick Jones / CTE Leadership)
-    const isAuthorizedAdminEmail =
-      cleanEmail === 'dcjones1441@gmail.com' || cleanEmail === 'admin.cte@wagner-cte.org';
-    
-    if (isAuthorizedAdminEmail) {
-      if (!password || password.trim().length === 0) {
-        return { success: false, error: 'Administrator password is required.' };
-      }
-
-      const isDerrick = cleanEmail.includes('dcjones');
-      const adminProfile: Profile = {
-        id: isDerrick ? 'adm_dcjones' : 'adm_wagner_cte_lead',
-        first_name: isDerrick ? 'Derrick' : 'District CTE',
-        last_name: isDerrick ? 'Jones' : 'Administrator',
-        email: cleanEmail,
-        role: 'admin',
-        school_name: 'Wagner High School',
-        department: 'Biomedical CTE Administration & Leadership',
-        created_at: new Date().toISOString(),
-      };
-
-      try {
-        const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-        creds[cleanEmail] = {
-          id: adminProfile.id,
-          password: password,
-          role: 'admin',
-          profile: adminProfile,
-        };
-        localStorage.setItem(STORAGE_KEYS.USER_CREDENTIALS, JSON.stringify(creds));
-      } catch (e) {
-        console.warn('Error saving administrator credentials', e);
-      }
-
-      setCurrentUser(adminProfile);
-      setRole('admin');
-      setAdminPage('dashboard');
-      return { success: true };
-    }
-
-    // 3. Check Teacher rosters
-    const tch = teachers.find((t) => t.email.toLowerCase() === cleanEmail);
-    if (tch) {
-      setActiveTeacherId(tch.id);
-      const profile: Profile = {
-        id: tch.id,
-        first_name: tch.first_name,
-        last_name: tch.last_name,
-        email: tch.email,
-        role: 'teacher',
-        prefix: tch.prefix,
-        school_name: tch.school_name,
-        department: tch.department,
-        created_at: tch.created_at,
-      };
-
-      if (password) {
-        try {
-          const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-          creds[cleanEmail] = {
-            id: tch.id,
-            password: password,
-            role: 'teacher',
-            profile: profile,
-          };
-          localStorage.setItem(STORAGE_KEYS.USER_CREDENTIALS, JSON.stringify(creds));
-        } catch (e) {
-          console.warn('Error caching teacher credentials', e);
-        }
-      }
-
-      setCurrentUser(profile);
-      setRole('teacher');
-      setTeacherPage('dashboard');
-      return { success: true };
-    }
-
-    // 4. Check Student rosters
-    const stu = students.find((s) => s.profile.email.toLowerCase() === cleanEmail);
-    if (stu) {
-      setActiveStudentId(stu.profile.id);
-
-      if (password) {
-        try {
-          const creds = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_CREDENTIALS) || '{}');
-          creds[cleanEmail] = {
-            id: stu.profile.id,
-            password: password,
-            role: 'student',
-            profile: stu.profile,
-          };
-          localStorage.setItem(STORAGE_KEYS.USER_CREDENTIALS, JSON.stringify(creds));
-        } catch (e) {
-          console.warn('Error caching student credentials', e);
-        }
-      }
-
-      setCurrentUser(stu.profile);
-      setRole('student');
-      setStudentPage('dashboard');
-      return { success: true };
-    }
-
-    return {
-      success: false,
-      error: 'No account found matching this email address. Please check your email or click "Create Account" below.',
-    };
+    await hydrateSupabaseUser(data.user);
+    return { success: true };
   };
 
   // Sign Out
@@ -1804,16 +1463,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     department?: string;
     initial_class_name?: string;
   }): TeacherProfile => {
-    const res = registerTeacher({
-      prefix: data.prefix,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      school_name: data.school_name,
-      department: data.department,
-      initial_class_name: data.initial_class_name,
+    const id = `roster_teacher_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const teacher: TeacherProfile = {
+      id,
+      prefix: data.prefix?.trim() || undefined,
+      first_name: data.first_name.trim(),
+      last_name: data.last_name.trim(),
+      email: data.email.trim().toLowerCase(),
+      school_name: data.school_name.trim(),
+      department: data.department?.trim() || 'CTE Biomedical Science',
+      created_at: new Date().toISOString(),
+    };
+
+    setTeachers((prev) => {
+      const updated = [teacher, ...prev];
+      localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(updated));
+      return updated;
     });
-    return res.teacher || DEFAULT_EMPTY_TEACHER;
+
+    if (data.initial_class_name?.trim()) {
+      const newClass: SchoolClass = {
+        id: `cls_${Date.now().toString(36)}`,
+        name: data.initial_class_name.trim(),
+        teacher_id: id,
+        school_year: '2025-2026',
+        period: 'Period 1',
+        join_code: `BACE${Math.floor(1000 + Math.random() * 9000)}`,
+        created_at: new Date().toISOString(),
+      };
+      setClasses((prev) => {
+        const updated = [newClass, ...prev];
+        localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(updated));
+        return updated;
+      });
+    }
+
+    return teacher;
   };
 
   const updateTeacherAccount = (id: string, updates: Partial<TeacherProfile>) => {
@@ -1840,30 +1525,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     target_exam_date?: string;
     readiness?: number;
   }): StudentOverview => {
-    const res = registerStudent({
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
+    const id = `roster_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const readiness = data.readiness ?? 0;
+    const student: StudentOverview = {
+      profile: {
+        id,
+        first_name: data.first_name.trim(),
+        last_name: data.last_name.trim(),
+        email: data.email.trim().toLowerCase(),
+        role: 'student',
+        class_id: data.class_id,
+        school_name: data.school_name,
+        target_exam_date: data.target_exam_date,
+        created_at: new Date().toISOString(),
+      },
       class_id: data.class_id,
-      target_exam_date: data.target_exam_date,
-      school_name: data.school_name,
-    });
-    return res.student || DEFAULT_EMPTY_STUDENT;
-  };
+      overall_readiness: readiness,
+      domain_mastery: {},
+      last_active: new Date().toISOString(),
+      status: readiness >= 80 ? 'Ready' : readiness >= 70 ? 'Developing' : 'Needs Review',
+      lessons_completed: 0,
+      questions_attempted: 0,
+      accuracy: 0,
+      mock_exam_scores: [],
+      weakest_topics: [],
+      strongest_topics: [],
+      recent_activities: [],
+    };
 
-  const createTestStudent = (data: {
-    first_name: string;
-    last_name: string;
-    class_id: string;
-    readiness?: number;
-  }): StudentOverview => {
-    return createStudentAccount({
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: `${data.first_name.toLowerCase()}.${data.last_name.toLowerCase()}@school.edu`,
-      class_id: data.class_id,
-      readiness: data.readiness || 0,
+    setStudents((prev) => {
+      const updated = [student, ...prev];
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
+      return updated;
     });
+
+    return student;
   };
 
   const updateStudentAccount = (id: string, updates: Partial<StudentOverview>) => {
