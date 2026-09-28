@@ -1,4 +1,5 @@
 import { Lesson } from '../types/database';
+import { COVERAGE_EXPANSION_LESSONS } from './coverageExpansionLessons';
 
 export const ALL_LESSONS: Lesson[] = [
   // -------------------------------------------------------------
@@ -898,4 +899,5 @@ export const ALL_LESSONS: Lesson[] = [
       }
     ]
   }
+  ...COVERAGE_EXPANSION_LESSONS,
 ];
