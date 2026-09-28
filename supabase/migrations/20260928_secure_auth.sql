@@ -22,22 +22,10 @@ WITH CHECK (
   AND role = 'student'
 );
 
-CREATE POLICY "Users update own non-privileged profile fields"
-ON public.profiles
-FOR UPDATE
-TO authenticated
-USING (id = auth.uid()::text)
-WITH CHECK (
-  id = auth.uid()::text
-  AND role = (
-    SELECT p.role
-    FROM public.profiles p
-    WHERE p.id = auth.uid()::text::text
-  )
-);
-
 -- Public educational content can remain readable.
 -- Sensitive operational/student data is authenticated-only.
+DROP POLICY IF EXISTS "Public Insert Questions" ON public.questions;
+DROP POLICY IF EXISTS "Public Update Questions" ON public.questions;
 DROP POLICY IF EXISTS "Public Read Classes" ON public.school_classes;
 DROP POLICY IF EXISTS "Public Read Assignments" ON public.assignments;
 DROP POLICY IF EXISTS "Public Insert Assignments" ON public.assignments;
