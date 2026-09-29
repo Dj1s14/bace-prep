@@ -44,6 +44,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
     classes,
     setTeacherPage,
     setStudentPage,
+    isProduction,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'switch' | 'create_teacher' | 'create_student'>(defaultTab);
@@ -52,7 +53,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   const [tPrefix, setTPrefix] = useState('Dr.');
   const [tFirstName, setTFirstName] = useState('');
   const [tLastName, setTLastName] = useState('');
-  const [tEmail, setTEmail] = useState(teachers.length === 0 ? 'dcjones1441@gmail.com' : '');
+  const [tEmail, setTEmail] = useState('');
   const [tSchool, setTSchool] = useState('Biotechnology & Life Sciences Academy');
   const [tDepartment, setTDepartment] = useState('CTE Biomedical Science');
   const [tInitialClass, setTInitialClass] = useState('Period 1 — Biotechnology I');
@@ -171,7 +172,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             <span>Switch Account ({teachers.length + students.length})</span>
           </button>
 
-          <button
+          {!isProduction && <button
             onClick={() => setActiveTab('create_teacher')}
             className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'create_teacher'
@@ -180,10 +181,10 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             }`}
           >
             <Briefcase className="w-4 h-4 text-teal-600" />
-            <span>+ Create Real Teacher</span>
-          </button>
+            <span>+ Create Demo Teacher</span>
+          </button>}
 
-          <button
+          {!isProduction && <button
             onClick={() => setActiveTab('create_student')}
             className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'create_student'
@@ -192,12 +193,17 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             }`}
           >
             <GraduationCap className="w-4 h-4 text-blue-600" />
-            <span>+ Create Real Student</span>
-          </button>
+            <span>+ Create Demo Student</span>
+          </button>}
         </div>
 
         {/* Modal Scrollable Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {isProduction && (
+            <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
+              Production accounts are managed by Supabase Auth. Students enroll by creating their own account with a teacher-issued class join code; teacher/admin identities are provisioned by an administrator.
+            </div>
+          )}
           {/* TAB 1: SWITCH ACCOUNT */}
           {activeTab === 'switch' && (
             <div className="space-y-6">
