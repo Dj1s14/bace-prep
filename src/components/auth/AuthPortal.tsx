@@ -80,7 +80,7 @@ export const AuthPortal: React.FC = () => {
   const handleStudentSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
 
     if (!sFirstName.trim() || !sLastName.trim()) {
       setErrorMsg('Please enter both your first and last name.');
@@ -117,7 +117,7 @@ export const AuthPortal: React.FC = () => {
   const handleTeacherSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
 
     if (!tFirstName.trim() || !tLastName.trim()) {
       setErrorMsg('Please enter your first and last name.');
@@ -158,7 +158,7 @@ export const AuthPortal: React.FC = () => {
   const handleAdminSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
 
     if (!aFirstName.trim() || !aLastName.trim()) {
       setErrorMsg('Please enter both your first and last name.');
@@ -198,7 +198,7 @@ export const AuthPortal: React.FC = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
 
     if (!loginEmail.trim() || !loginEmail.includes('@')) {
       setErrorMsg('Please enter your registered email address.');
@@ -222,7 +222,7 @@ export const AuthPortal: React.FC = () => {
   // Google OAuth button handler
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
     setLoading(true);
     const res = await signInWithGoogle(activePortal);
     setLoading(false);
@@ -284,7 +284,7 @@ export const AuthPortal: React.FC = () => {
                   onClick={() => {
                     setActivePortal('student');
                     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
                   }}
                   className="text-xs text-indigo-300 hover:text-white px-3 py-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 border border-indigo-700/60 transition-colors cursor-pointer"
                 >
@@ -298,7 +298,7 @@ export const AuthPortal: React.FC = () => {
                   onClick={() => {
                     setActivePortal('student');
                     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
                   }}
                   className={`flex items-center justify-center space-x-1.5 py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activePortal === 'student'
@@ -317,7 +317,6 @@ export const AuthPortal: React.FC = () => {
                     setAuthMode('sign_in');
                     setErrorMsg(null);
                     setSuccessMsg(null);
-    setSuccessMsg(null);
                   }}
                   className={`flex items-center justify-center space-x-1.5 py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activePortal === 'teacher'
@@ -369,7 +368,7 @@ export const AuthPortal: React.FC = () => {
                     onClick={() => {
                       setAuthMode('sign_in');
                       setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
                     }}
                     className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
                       authMode === 'sign_in' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-white'
@@ -377,19 +376,21 @@ export const AuthPortal: React.FC = () => {
                   >
                     Sign In
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('sign_up');
-                      setErrorMsg(null);
-    setSuccessMsg(null);
-                    }}
-                    className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                      authMode === 'sign_up' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Register
-                  </button>
+                  {activePortal === 'student' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('sign_up');
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                        authMode === 'sign_up' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Register
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -946,7 +947,7 @@ export const AuthPortal: React.FC = () => {
                   onClick={() => {
                     setActivePortal(activePortal === 'admin' ? 'student' : 'admin');
                     setErrorMsg(null);
-    setSuccessMsg(null);
+                      setSuccessMsg(null);
                   }}
                   className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors flex items-center gap-1 cursor-pointer"
                 >
