@@ -246,6 +246,69 @@ interface AppContextType {
   regenerateClassJoinCode: (classId: string) => string;
   resetStudentAccess: (studentId: string) => { tempPassword: string; studentName: string };
 
+  // Account modal
+  isAccountModalOpen: boolean;
+  setIsAccountModalOpen: (open: boolean) => void;
+  accountModalTab: 'switch' | 'create_teacher' | 'create_student';
+  openAccountModal: (tab?: 'switch' | 'create_teacher' | 'create_student') => void;
+
+  // Student learning & assessment actions
+  overallReadiness: number;
+  lastExamAttempt: QuizAttempt | null;
+  setLastExamAttempt: React.Dispatch<React.SetStateAction<QuizAttempt | null>>;
+  activeExamConfig: {
+    title: string;
+    totalQuestions: number;
+    timeLimitMinutes: number;
+    quizType: 'mock_quick' | 'mock_half' | 'mock_full';
+  } | null;
+  setActiveExamConfig: React.Dispatch<React.SetStateAction<{
+    title: string;
+    totalQuestions: number;
+    timeLimitMinutes: number;
+    quizType: 'mock_quick' | 'mock_half' | 'mock_full';
+  } | null>>;
+  activePracticeConfig: {
+    mode: string;
+    domainId?: string;
+    topicId?: string;
+    lessonId?: string;
+    count: number;
+  } | null;
+  setActivePracticeConfig: React.Dispatch<React.SetStateAction<{
+    mode: string;
+    domainId?: string;
+    topicId?: string;
+    lessonId?: string;
+    count: number;
+  } | null>>;
+  recordLessonCompletion: (lessonId: string, studentId?: string) => void;
+  recordLessonGrade: (gradeData: Omit<LessonGradeRecord, 'id' | 'submitted_at'>) => void;
+  updateLessonGrade: (id: string, updates: Partial<LessonGradeRecord>) => void;
+  recordExamSubmission: (attempt: QuizAttempt) => void;
+  deleteActivitySession: (sessionId: string) => void;
+  updateDomainMastery: (domainId: string, newScore: number) => void;
+
+  // Teacher / authoring actions
+  addNewQuestion: (question: Omit<Question, 'id' | 'created_at'>) => void;
+  createQuestion: (question: Omit<Question, 'id' | 'created_at'>) => void;
+  addNewAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
+  createAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
+  deleteAssignment: (assignmentId: string) => void;
+  markAssignmentCompleted: (assignmentId: string, studentId?: string, score?: number) => void;
+  createClass: (schoolClass: Omit<SchoolClass, 'id' | 'created_at'>) => void;
+
+  // Navigation helpers
+  startLesson: (lessonId: string) => void;
+  openDomain: (domainId: string) => void;
+  startPractice: (config: {
+    mode: string;
+    domainId?: string;
+    topicId?: string;
+    lessonId?: string;
+    count: number;
+  }) => void;
+
   // Bench Simulator State & Actions
   benchStats: BenchSimulatorStats;
   recordBenchActivity: (
