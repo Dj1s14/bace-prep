@@ -24,7 +24,8 @@ import {
   Microscope,
   Check,
 } from 'lucide-react';
-import { useApp, DEFAULT_FACULTY_ACCESS_CODE, DEFAULT_ADMIN_ACCESS_CODE } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
+import { DomainIcon } from '../common/DomainIcon';
 
 export const LandingPage: React.FC = () => {
   const {
@@ -33,6 +34,7 @@ export const LandingPage: React.FC = () => {
     registerTeacher,
     registerAdmin,
     classes,
+    domains,
     isAuthenticated,
     currentUser,
     role,
@@ -58,7 +60,7 @@ export const LandingPage: React.FC = () => {
   const [sLastName, setSLastName] = useState('');
   const [sEmail, setSEmail] = useState('');
   const [sPassword, setSPassword] = useState('');
-  const [sJoinCode, setSJoinCode] = useState('WAGNER202');
+  const [sJoinCode, setSJoinCode] = useState('');
   const [sExamDate, setSExamDate] = useState('2026-05-12');
 
   // Teacher Registration Fields
@@ -72,9 +74,9 @@ export const LandingPage: React.FC = () => {
   const [tAccessCode, setTAccessCode] = useState('');
 
   // Admin Registration Fields
-  const [aFirstName, setAFirstName] = useState('Derrick');
-  const [aLastName, setALastName] = useState('Jones');
-  const [aEmail, setAEmail] = useState('dcjones1441@gmail.com');
+  const [aFirstName, setAFirstName] = useState('');
+  const [aLastName, setALastName] = useState('');
+  const [aEmail, setAEmail] = useState('');
   const [aPassword, setAPassword] = useState('');
   const [aSchool, setASchool] = useState('Wagner High School');
   const [aDepartment, setADepartment] = useState('Biomedical CTE Administration & Leadership');
@@ -86,7 +88,7 @@ export const LandingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // Unified Sign In Handler
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -102,7 +104,7 @@ export const LandingPage: React.FC = () => {
     }
 
     setLoading(true);
-    const res = loginUser(loginEmail.trim(), loginPassword);
+    const res = await loginUser(loginEmail.trim(), loginPassword);
     setLoading(false);
 
     if (!res.success && res.error) {
@@ -111,7 +113,7 @@ export const LandingPage: React.FC = () => {
   };
 
   // Student Registration Handler
-  const handleStudentSignUp = (e: React.FormEvent) => {
+  const handleStudentSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -120,13 +122,13 @@ export const LandingPage: React.FC = () => {
       setErrorMsg('Please complete all required student fields.');
       return;
     }
-    if (!sPassword || sPassword.length < 4) {
-      setErrorMsg('Password must be at least 4 characters long.');
+    if (!sPassword || sPassword.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
       return;
     }
 
     setLoading(true);
-    const res = registerStudent({
+    const res = await registerStudent({
       first_name: sFirstName.trim(),
       last_name: sLastName.trim(),
       email: sEmail.trim(),
@@ -138,11 +140,13 @@ export const LandingPage: React.FC = () => {
 
     if (!res.success && res.error) {
       setErrorMsg(res.error);
+    } else if (res.success) {
+      setSuccessMsg('Student account created. If email confirmation is enabled, check your inbox before signing in.');
     }
   };
 
   // Teacher Registration Handler
-  const handleTeacherSignUp = (e: React.FormEvent) => {
+  const handleTeacherSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -161,7 +165,7 @@ export const LandingPage: React.FC = () => {
     }
 
     setLoading(true);
-    const res = registerTeacher({
+    const res = await registerTeacher({
       prefix: tPrefix,
       first_name: tFirstName.trim(),
       last_name: tLastName.trim(),
@@ -179,7 +183,7 @@ export const LandingPage: React.FC = () => {
   };
 
   // Admin Registration Handler
-  const handleAdminSignUp = (e: React.FormEvent) => {
+  const handleAdminSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -198,7 +202,7 @@ export const LandingPage: React.FC = () => {
     }
 
     setLoading(true);
-    const res = registerAdmin({
+    const res = await registerAdmin({
       first_name: aFirstName.trim(),
       last_name: aLastName.trim(),
       email: aEmail.trim(),
@@ -314,7 +318,7 @@ export const LandingPage: React.FC = () => {
                 <div>
                   <h3 className="text-xs font-bold text-white">Full-Length Timed Mock Exams</h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    600+ authentic multiple-choice questions categorized across all 5 official Biotility exam domains with immediate rationales and readiness analytics.
+                    Extensive scenario-based and multiple-choice practice across all 8 BACE domains with immediate rationales and readiness analytics.
                   </p>
                 </div>
               </div>
@@ -475,49 +479,8 @@ export const LandingPage: React.FC = () => {
                 {authMode === 'sign_up' && (
                   <div className="space-y-4">
                     {/* Role Selector Tabs for Registration */}
-                    <div className="grid grid-cols-3 bg-slate-950 p-1 rounded-xl border border-slate-800 text-center text-xs">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSignUpRole('student');
-                          setErrorMsg(null);
-                        }}
-                        className={`py-1.5 px-2 rounded-lg font-semibold transition-all cursor-pointer ${
-                          signUpRole === 'student'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Student
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSignUpRole('teacher');
-                          setErrorMsg(null);
-                        }}
-                        className={`py-1.5 px-2 rounded-lg font-semibold transition-all cursor-pointer ${
-                          signUpRole === 'teacher'
-                            ? 'bg-teal-600 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Faculty
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSignUpRole('admin');
-                          setErrorMsg(null);
-                        }}
-                        className={`py-1.5 px-2 rounded-lg font-semibold transition-all cursor-pointer ${
-                          signUpRole === 'admin'
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Admin
-                      </button>
+                    <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 text-xs text-blue-200">
+                      Self-registration creates <strong>student candidate</strong> accounts only. Faculty and administrator roles are provisioned securely through Supabase administration.
                     </div>
 
                     {/* STUDENT REGISTRATION */}
@@ -687,10 +650,10 @@ export const LandingPage: React.FC = () => {
                             </label>
                             <button
                               type="button"
-                              onClick={() => setTAccessCode(DEFAULT_FACULTY_ACCESS_CODE)}
+                              onClick={() => setTAccessCode('')}
                               className="text-[10px] text-teal-400 hover:underline cursor-pointer"
                             >
-                              Fill Wagner Key
+                              Faculty accounts are provisioned
                             </button>
                           </div>
                           <div className="relative">
@@ -700,7 +663,7 @@ export const LandingPage: React.FC = () => {
                               required
                               value={tAccessCode}
                               onChange={(e) => setTAccessCode(e.target.value.toUpperCase())}
-                              placeholder={DEFAULT_FACULTY_ACCESS_CODE}
+                              placeholder="Provisioned by administrator"
                               className="w-full bg-slate-950/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-teal-500"
                             />
                           </div>
@@ -752,7 +715,7 @@ export const LandingPage: React.FC = () => {
                             required
                             value={aEmail}
                             onChange={(e) => setAEmail(e.target.value)}
-                            placeholder="dcjones1441@gmail.com"
+                            placeholder="administrator@school.edu"
                             className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                           />
                         </div>
@@ -776,10 +739,10 @@ export const LandingPage: React.FC = () => {
                             </label>
                             <button
                               type="button"
-                              onClick={() => setAAccessCode(DEFAULT_ADMIN_ACCESS_CODE)}
+                              onClick={() => setAAccessCode('')}
                               className="text-[10px] text-indigo-400 hover:underline cursor-pointer"
                             >
-                              Fill Admin Key
+                              Admin accounts are provisioned
                             </button>
                           </div>
                           <div className="relative">
@@ -789,7 +752,7 @@ export const LandingPage: React.FC = () => {
                               required
                               value={aAccessCode}
                               onChange={(e) => setAAccessCode(e.target.value.toUpperCase())}
-                              placeholder={DEFAULT_ADMIN_ACCESS_CODE}
+                              placeholder="Provisioned by administrator"
                               className="w-full bg-slate-950/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-indigo-500"
                             />
                           </div>
@@ -826,7 +789,7 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 5 Official BACE Exam Domains Grid */}
+        {/* 8 BACE Exam Domains Grid */}
         <section className="mt-16 sm:mt-24 pt-12 border-t border-slate-800/80">
           <div className="text-center max-w-3xl mx-auto mb-12">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs font-semibold mb-3">
@@ -834,7 +797,7 @@ export const LandingPage: React.FC = () => {
               <span>Official Biotility Certification Competencies</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Master the 5 BACE Examination Domains
+              Master the 8 BACE Examination Domains
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-2">
               Comprehensive question banks, laboratory math drills, and virtual benchtop modules mapped directly to industry credentialing standards.
@@ -842,75 +805,21 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {/* Domain 1 */}
-            <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold font-mono text-teal-400 bg-teal-950/60 border border-teal-800/80 px-2 py-0.5 rounded">
-                  Domain 1 • 25%
-                </span>
-                <FlaskConical className="w-5 h-5 text-teal-400" />
+            {domains.map((domain) => (
+              <div
+                key={domain.id}
+                className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold font-mono text-teal-400 bg-teal-950/60 border border-teal-800/80 px-2 py-0.5 rounded">
+                    Domain {domain.display_order} • {domain.exam_weight}% of points
+                  </span>
+                  <DomainIcon name={domain.icon_name} className="w-5 h-5 text-teal-400" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-1.5">{domain.name}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">{domain.description}</p>
               </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">General Biotechnology & Laboratory Skills</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Micropipetting techniques, metric conversions, serial dilutions, molarity and percentage solution prep, GLP/GMP laboratory documentation, and pH buffer adjustments.
-              </p>
-            </div>
-
-            {/* Domain 2 */}
-            <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold font-mono text-blue-400 bg-blue-950/60 border border-blue-800/80 px-2 py-0.5 rounded">
-                  Domain 2 • 25%
-                </span>
-                <Dna className="w-5 h-5 text-blue-400" />
-              </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">Molecular Biology & Genetic Engineering</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Plasmid DNA isolation, PCR amplification cycling, restriction endonuclease digestion, horizontal agarose gel electrophoresis, and bacterial transformation.
-              </p>
-            </div>
-
-            {/* Domain 3 */}
-            <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded">
-                  Domain 3 • 20%
-                </span>
-                <Layers className="w-5 h-5 text-emerald-400" />
-              </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">Protein Biochemistry & Assays</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                SDS-PAGE vertical protein electrophoresis, Bradford and BCA colorimetric assays, spectrophotometric Beer-Lambert law calculations, and ELISA immunoassay protocols.
-              </p>
-            </div>
-
-            {/* Domain 4 */}
-            <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold font-mono text-amber-400 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded">
-                  Domain 4 • 15%
-                </span>
-                <Briefcase className="w-5 h-5 text-amber-400" />
-              </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">Biomanufacturing & Quality Systems</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Upstream bioreactor fermentation, downstream column chromatography purification, cGMP compliance, standard operating procedure (SOP) auditing, and QA/QC sterility testing.
-              </p>
-            </div>
-
-            {/* Domain 5 */}
-            <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold font-mono text-rose-400 bg-rose-950/60 border border-rose-800/80 px-2 py-0.5 rounded">
-                  Domain 5 • 15%
-                </span>
-                <ShieldCheck className="w-5 h-5 text-rose-400" />
-              </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">Safety, Regulatory & Applied Math</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                OSHA and EPA hazard communication standards, SDS interpretation, autoclave sterilization validation, biohazard containment biosafety levels (BSL 1–4), and lab algebra.
-              </p>
-            </div>
+            ))}
 
             {/* Virtual Bench Simulator feature */}
             <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-950/40 to-slate-900 border border-teal-800/50">
