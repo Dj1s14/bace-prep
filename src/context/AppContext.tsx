@@ -1094,25 +1094,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteClass = (id: string) => {
+    const affectedStudentIds = students.filter((student) => student.class_id === id).map((student) => student.profile.id);
     setClasses((prev) => prev.filter((c) => c.id !== id));
-    // Clear class_id for any students enrolled in this deleted class
-    setStudents((prev) => {
-      const updated = prev.map((s) => {
-        if (s.class_id === id) {
-          return {
-            ...s,
-            class_id: '',
-            profile: {
-              ...s.profile,
-              class_id: '',
-            },
-          };
-        }
-        return s;
-      });
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
-      return updated;
-    });
+    setStudents((prev) =>
+      prev.map((student) =>
+        student.class_id === id
+          ? { ...student, class_id: '', profile: { ...student.profile, class_id: '' } }
+          : student
+      )
+    );
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void (async () => {
+          try {
+            for (const studentId of affectedStudentIds) {
+              await cloudUpdateStudentProfile(sb, studentId, { class_id: '' });
+            }
+            await cloudDeleteClass(sb, id);
+          } catch (err) {
+            console.error('Unable to delete shared class:', err);
+            if (currentUser) await refreshCloudWorkspace(currentUser);
+          }
+        })();
+      }
+    }
   };
 
   const refreshCloudWorkspace = async (profile: Profile) => {
@@ -1733,28 +1740,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const transferStudentPeriod = (studentId: string, newClassId: string) => {
-    setStudents((prev) => {
-      const updated = prev.map((s) => {
-        if (s.profile.id === studentId) {
-          return {
-            ...s,
-            class_id: newClassId,
-            profile: {
-              ...s.profile,
-              class_id: newClassId,
-            },
-          };
-        }
-        return s;
-      });
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
-      return updated;
-    });
+    setStudents((prev) =>
+      prev.map((student) =>
+        student.profile.id === studentId
+          ? { ...student, class_id: newClassId, profile: { ...student.profile, class_id: newClassId } }
+          : student
+      )
+    );
 
     if (currentUser?.id === studentId) {
-      const updatedUser = { ...currentUser, class_id: newClassId };
-      setCurrentUser(updatedUser);
-      localStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(updatedUser));
+      setCurrentUser({ ...currentUser, class_id: newClassId });
+    }
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateStudentProfile(sb, studentId, { class_id: newClassId }).catch(async (err) => {
+          console.error('Unable to transfer shared student:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
     }
   };
 
@@ -1764,11 +1769,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const randDigits = Math.floor(10 + Math.random() * 90);
     const newCode = `WAGNER${periodNum || '1'}0${randDigits}`;
 
-    setClasses((prev) => {
-      const updated = prev.map((c) => (c.id === classId ? { ...c, join_code: newCode } : c));
-      localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(updated));
-      return updated;
-    });
+    setClasses((prev) => prev.map((c) => (c.id === classId ? { ...c, join_code: newCode } : c)));
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void import('../lib/cloudData').then(({ cloudUpdateClass }) =>
+          cloudUpdateClass(sb, classId, { join_code: newCode }).catch(async (err) => {
+            console.error('Unable to update class join code:', err);
+            if (currentUser) await refreshCloudWorkspace(currentUser);
+          })
+        );
+      }
+    }
 
     return newCode;
   };
@@ -1807,6 +1820,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = [...existing, lessonId];
       const newMap = { ...studentCompletedLessonsMap, [targetStudentId]: updated };
       setStudentCompletedLessonsMap(newMap);
+
+      if (environment === 'production') {
+        const sb = getSupabase();
+        if (sb) {
+          void cloudUpsertLessonProgress(sb, {
+            id: `lp_${targetStudentId}_${lessonId}`,
+            student_id: targetStudentId,
+            lesson_id: lessonId,
+            completed: true,
+            completed_at: new Date().toISOString(),
+          }).catch((err) => console.error('Unable to save lesson progress:', err));
+        }
+      }
 
       // Auto-complete any active assignment for this lesson
       const matchingAssignment = assignments.find(
@@ -1855,11 +1881,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const filtered = prev.filter((p) => !(p.assignment_id === assignmentId && p.student_id === targetStudentId));
       return [newRecord, ...filtered];
     });
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpsertAssignmentProgress(sb, newRecord).catch((err) =>
+          console.error('Unable to save assignment progress:', err)
+        );
+      }
+    }
   };
 
   const deleteAssignment = (assignmentId: string) => {
     setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
     setAssignmentProgress((prev) => prev.filter((p) => p.assignment_id !== assignmentId));
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudDeleteAssignment(sb, assignmentId).catch(async (err) => {
+          console.error('Unable to delete shared assignment:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const recordExamSubmission = (attempt: QuizAttempt) => {
@@ -1885,6 +1930,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setActivitySessions((prev) => [...prev, newSession]);
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void Promise.all([
+          cloudInsertQuizAttempt(sb, { ...attempt, student_id: targetStudentId }),
+          cloudInsertActivitySession(sb, newSession),
+        ]).catch((err) => console.error('Unable to save exam submission:', err));
+      }
+    }
 
     setStudents((prev) =>
       prev.map((s) => {
@@ -1951,6 +2006,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!sessionToDelete) return;
 
     setActivitySessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudDeleteActivitySession(sb, sessionId).catch((err) =>
+          console.error('Unable to delete shared activity session:', err)
+        );
+      }
+    }
 
     setStudents((prev) =>
       prev.map((s) => {
@@ -2021,6 +2085,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       created_at: new Date().toISOString(),
     };
     setAssignments((prev) => [newA, ...prev]);
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudCreateAssignment(sb, newA).catch(async (err) => {
+          console.error('Unable to create shared assignment:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const createClass = (c: Omit<SchoolClass, 'id' | 'created_at'>) => {
@@ -2031,6 +2105,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       created_at: new Date().toISOString(),
     };
     setClasses((prev) => [...prev, newClass]);
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudCreateClass(sb, newClass).catch(async (err) => {
+          console.error('Unable to create shared class:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const recordLessonGrade = (gradeData: Omit<LessonGradeRecord, 'id' | 'submitted_at'>) => {
@@ -2050,6 +2134,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       submitted_at: new Date().toISOString(),
     };
     setLessonGrades((prev) => [newRecord, ...prev]);
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudInsertLessonGrade(sb, newRecord).catch((err) =>
+          console.error('Unable to save shared lesson grade:', err)
+        );
+      }
+    }
+
     if (gradeData.lesson_id) {
       recordLessonCompletion(gradeData.lesson_id);
     }
@@ -2059,6 +2153,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLessonGrades((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateLessonGrade(sb, id, updates).catch(async (err) => {
+          console.error('Unable to update shared lesson grade:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const startLesson = (lessonId: string) => {
