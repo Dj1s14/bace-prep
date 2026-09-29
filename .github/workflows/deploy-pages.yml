@@ -1,4 +1,5 @@
 name: Deploy BACE Prep to GitHub Pages
+# Pages enabled; this workflow also serves as the production build check.
 
 on:
   push:
