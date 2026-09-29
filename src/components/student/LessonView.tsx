@@ -72,7 +72,7 @@ export const LessonView: React.FC = () => {
     return ALL_MASTERY_LESSONS.find(m => m.lesson_metadata.lesson_id === selectedMasteryLessonId) || defaultMasteryLesson;
   }, [selectedMasteryLessonId, defaultMasteryLesson]);
 
-  // All 150 questions for this lesson
+  // Questions mapped to this lesson (with topic/domain fallback for legacy lessons)
   const allLessonQuestions = useMemo(() => {
     const matched = questions.filter((q) => q.lesson_id === lesson.id);
     if (matched.length > 0) return matched;
@@ -82,6 +82,20 @@ export const LessonView: React.FC = () => {
   // Quiz vs Browse mode
   const [assessmentMode, setAssessmentMode] = useState<'quiz' | 'browse'>('quiz');
   const [drillSize, setDrillSize] = useState<number>(5);
+
+  const drillSizeOptions = useMemo(() => {
+    const fullBank = allLessonQuestions.length;
+    return Array.from(
+      new Set([...([5, 10, 25, 50].filter((size) => size < fullBank)), fullBank])
+    ).filter((size) => size > 0);
+  }, [allLessonQuestions.length]);
+
+  React.useEffect(() => {
+    setDrillSize(Math.min(5, Math.max(1, allLessonQuestions.length)));
+    setSelectedAnswers({});
+    setSubmittedAnswers({});
+    setLessonFinished(false);
+  }, [lesson.id, allLessonQuestions.length]);
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
   const [seed, setSeed] = useState<number>(0);
   const [browseSearch, setBrowseSearch] = useState<string>('');
@@ -634,7 +648,7 @@ export const LessonView: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-600">Drill Size:</span>
-                {[5, 10, 25, 50, 150].map((sz) => (
+                {drillSizeOptions.map((sz) => (
                   <button
                     key={sz}
                     onClick={() => {
@@ -647,7 +661,7 @@ export const LessonView: React.FC = () => {
                         : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {sz === 150 ? 'Full Bank' : `${sz} Qs`}
+                    {sz === allLessonQuestions.length ? `Full Bank (${allLessonQuestions.length})` : `${sz} Qs`}
                   </button>
                 ))}
               </div>
@@ -670,7 +684,7 @@ export const LessonView: React.FC = () => {
                 <button
                   onClick={handleShuffle}
                   className="inline-flex items-center space-x-1 px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-semibold transition-colors"
-                  title="Draw a new random set from the 150 questions"
+                  title={`Draw a new random set from ${allLessonQuestions.length} lesson questions`}
                 >
                   <Shuffle className="w-3.5 h-3.5 text-slate-500" />
                   <span>Shuffle</span>
@@ -831,7 +845,7 @@ export const LessonView: React.FC = () => {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search 150 lesson questions..."
+                  placeholder={`Search ${allLessonQuestions.length} lesson questions...`}
                   value={browseSearch}
                   onChange={(e) => {
                     setBrowseSearch(e.target.value);
