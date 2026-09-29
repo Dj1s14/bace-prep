@@ -218,6 +218,9 @@ export const AdminPortal: React.FC = () => {
     setSyncStatus('Syncing BACE curriculum questions and assignments to Supabase...');
     try {
       const qRes = await syncQuestionsToSupabase(questions);
+      if (qRes.error) {
+        throw new Error(qRes.error);
+      }
       setSyncStatus(`Database synchronization completed: ${qRes.count} questions checked/synced.`);
     } catch (err: any) {
       setSyncStatus(`Sync error: ${err?.message || 'Check database permissions'}`);
