@@ -40,6 +40,7 @@ import {
   cloudDeleteActivitySession,
   cloudDeleteAssignment,
   cloudDeleteClass,
+  cloudUpdateClass,
   cloudInsertActivitySession,
   cloudInsertLessonGrade,
   cloudInsertQuizAttempt,
@@ -275,7 +276,7 @@ interface AppContextType {
   } | null) => void;
 
   // Actions
-  recordLessonCompletion: (lessonId: string) => void;
+  recordLessonCompletion: (lessonId: string, studentId?: string) => void;
   recordExamSubmission: (attempt: QuizAttempt) => void;
   deleteActivitySession: (sessionId: string) => void;
   updateDomainMastery: (domainId: string, newScore: number) => void;
@@ -1421,9 +1422,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const cleanEmail = data.email.trim().toLowerCase();
-    const matchedClass = data.class_id
-      ? classes.find((c) => c.id === data.class_id)
-      : classes.find((c) => c.join_code?.toUpperCase() === data.class_join_code?.trim().toUpperCase());
+    let matchedClass = data.class_id ? classes.find((c) => c.id === data.class_id) : undefined;
+
+    if (!matchedClass && data.class_join_code?.trim()) {
+      const { data: classRow, error: classError } = await sb
+        .from('school_classes')
+        .select('*')
+        .eq('join_code', data.class_join_code.trim().toUpperCase())
+        .maybeSingle();
+
+      if (classError) {
+        return { success: false, error: 'Unable to verify the class join code.' };
+      }
+      if (!classRow) {
+        return { success: false, error: 'That class join code was not found.' };
+      }
+      matchedClass = classRow as SchoolClass;
+    }
 
     const { data: authData, error } = await sb.auth.signUp({
       email: cleanEmail,
@@ -1719,24 +1734,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteStudentAccount = (id: string) => {
-    setStudents((prev) => {
-      const filtered = prev.filter((s) => s.profile.id !== id);
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(filtered));
-      return filtered;
-    });
-    if (activeStudentId === id) {
-      setActiveStudentId('');
+    if (environment === 'production') {
+      setStudents((prev) => prev.filter((student) => student.profile.id !== id));
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateStudentProfile(sb, id, { class_id: '' }).catch(async (err) => {
+          console.error('Unable to unenroll shared student:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+      return;
     }
-    setActivitySessions((prev) => {
-      const filtered = prev.filter((a) => a.student_id !== id);
-      localStorage.setItem(STORAGE_KEYS.ACTIVITY_SESSIONS, JSON.stringify(filtered));
-      return filtered;
-    });
-    setLessonGrades((prev) => {
-      const filtered = prev.filter((g) => g.student_id !== id);
-      localStorage.setItem(STORAGE_KEYS.LESSON_GRADES, JSON.stringify(filtered));
-      return filtered;
-    });
+
+    setStudents((prev) => prev.filter((student) => student.profile.id !== id));
+    setActivitySessions((prev) => prev.filter((activity) => activity.student_id !== id));
+    setLessonGrades((prev) => prev.filter((grade) => grade.student_id !== id));
   };
 
   const transferStudentPeriod = (studentId: string, newClassId: string) => {
@@ -1774,12 +1786,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (environment === 'production') {
       const sb = getSupabase();
       if (sb) {
-        void import('../lib/cloudData').then(({ cloudUpdateClass }) =>
-          cloudUpdateClass(sb, classId, { join_code: newCode }).catch(async (err) => {
-            console.error('Unable to update class join code:', err);
-            if (currentUser) await refreshCloudWorkspace(currentUser);
-          })
-        );
+        void cloudUpdateClass(sb, classId, { join_code: newCode }).catch(async (err) => {
+          console.error('Unable to update class join code:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
       }
     }
 
@@ -1812,8 +1822,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Domain & Lesson Mastery Actions
-  const recordLessonCompletion = (lessonId: string) => {
-    const targetStudentId = currentStudent.profile.id;
+  const recordLessonCompletion = (lessonId: string, studentId?: string) => {
+    const targetStudentId = studentId || currentStudent.profile.id;
     const existing = studentCompletedLessonsMap[targetStudentId] || [];
 
     if (!existing.includes(lessonId)) {
@@ -2145,7 +2155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (gradeData.lesson_id) {
-      recordLessonCompletion(gradeData.lesson_id);
+      recordLessonCompletion(gradeData.lesson_id, gradeData.student_id);
     }
   };
 
