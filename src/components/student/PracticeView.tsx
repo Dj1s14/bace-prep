@@ -18,6 +18,7 @@ import { useApp } from '../../context/AppContext';
 import { DomainIcon } from '../common/DomainIcon';
 import { Question } from '../../types/database';
 import { cleanQuestionText } from '../../utils/questionUtils';
+import { allocateQuestionsByPointWeight } from '../../data/baceBlueprint';
 
 export const PracticeView: React.FC = () => {
   const {
@@ -58,10 +59,40 @@ export const PracticeView: React.FC = () => {
       pool = pool.filter((q) => q.domain_id === 'd4' || q.topic_id === 't1_3' || q.domain_id === 'd6');
     }
 
-    // Shuffle pool
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const count = options?.count || 10;
-    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    let selected: Question[] = [];
+
+    const hasSpecificFilter = Boolean(options?.lessonId || options?.domainId || options?.topicId) || mode === 'Weakest Topics';
+
+    if (!hasSpecificFilter) {
+      // Mixed practice follows the published BACE point-weight distribution
+      // so the oversized legacy Domain 1 banks cannot dominate random sessions.
+      const targets = allocateQuestionsByPointWeight(count);
+      const used = new Set<string>();
+
+      domains.forEach((domain) => {
+        const domainPool = questions
+          .filter((q) => q.domain_id === domain.id && q.active !== false)
+          .sort(() => 0.5 - Math.random());
+        const take = Math.min(targets[domain.id] || 0, domainPool.length);
+        domainPool.slice(0, take).forEach((q) => {
+          selected.push(q);
+          used.add(q.id);
+        });
+      });
+
+      if (selected.length < count) {
+        const remainder = questions
+          .filter((q) => q.active !== false && !used.has(q.id))
+          .sort(() => 0.5 - Math.random());
+        selected.push(...remainder.slice(0, count - selected.length));
+      }
+
+      selected = selected.slice(0, count).sort(() => 0.5 - Math.random());
+    } else {
+      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    }
 
     setActiveSession({
       questions: selected.length > 0 ? selected : questions.slice(0, 10),
