@@ -30,6 +30,7 @@ export const StudentProgressView: React.FC = () => {
     startLesson,
     recordExamSubmission,
     setStudentPage,
+    isDemo,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'all' | 'mastery' | 'trends' | 'completion'>('all');
@@ -44,6 +45,9 @@ export const StudentProgressView: React.FC = () => {
     questionsAnswered > 0 || lessonsCount > 0 || mockExamsCompleted > 0 ? 1 : 0;
 
   const weakestTopics = currentStudent.weakest_topics || [];
+  const ownActivitySessions = activitySessions.filter((session) =>
+    session.student_id ? session.student_id === currentStudent.profile.id : isDemo
+  );
 
   const recommendedNextSteps = [
     {
@@ -109,20 +113,18 @@ export const StudentProgressView: React.FC = () => {
             </p>
           </div>
 
-          {/* Quick Simulation / Testing Action */}
-          <div className="flex flex-col items-start sm:items-end shrink-0">
-            <button
-              onClick={handleSimulateQuickDrill}
-              className="inline-flex items-center space-x-2 px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-all shadow-2xs cursor-pointer"
-              title="Test dynamic updates by logging a simulated practice set"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
-              <span>Simulate Practice Session (+90%)</span>
-            </button>
-            <span className="text-[10px] text-slate-400 mt-1">
-              Verifies live chart responsiveness
-            </span>
-          </div>
+          {isDemo && (
+            <div className="flex flex-col items-start sm:items-end shrink-0">
+              <button
+                onClick={handleSimulateQuickDrill}
+                className="inline-flex items-center space-x-2 px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-all shadow-2xs cursor-pointer"
+                title="Demo-only chart responsiveness check"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                <span>Demo: Simulate Practice (+90%)</span>
+              </button>
+            </div>
+          )>
         </div>
 
         {/* Live Simulation Feedback Toast */}
@@ -250,7 +252,7 @@ export const StudentProgressView: React.FC = () => {
         </div>
 
         <span className="hidden sm:inline-flex text-xs text-slate-500 font-medium">
-          {activitySessions.length} recorded sessions
+          {ownActivitySessions.length} recorded sessions
         </span>
       </div>
 
