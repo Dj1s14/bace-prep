@@ -364,7 +364,7 @@ const DEFAULT_EMPTY_TEACHER: TeacherProfile = {
   prefix: 'Dr.',
   first_name: 'Faculty',
   last_name: 'Instructor',
-  email: 'dcjones1441@gmail.com',
+  email: 'instructor@biotechprep.edu',
   school_name: 'Biotechnology & Life Sciences Academy',
   department: 'CTE Biomedical Science',
   created_at: new Date().toISOString(),
@@ -900,6 +900,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Authenticated identity is restored only from the Supabase session.
   // Do not persist an unsigned app-level user object as an authentication session.
+  // Bridge authenticated Supabase identities into the app's progress/roster model
+  // so first-time users do not write progress against a generic fallback profile.
+  useEffect(() => {
+    if (!currentUser || environment !== 'production') return;
+
+    if (currentUser.role === 'student') {
+      setStudents((prev) => {
+        const exists = prev.some(
+          (student) =>
+            student.profile.id === currentUser.id ||
+            student.profile.email.toLowerCase() === currentUser.email.toLowerCase()
+        );
+        if (exists) return prev;
+
+        const student: StudentOverview = {
+          ...DEFAULT_EMPTY_STUDENT,
+          profile: currentUser,
+          class_id: currentUser.class_id || '',
+          last_active: 'Signed in',
+          recent_activities: [],
+        };
+        return [student, ...prev];
+      });
+      setActiveStudentIdState(currentUser.id);
+    }
+
+    if (currentUser.role === 'teacher') {
+      setTeachers((prev) => {
+        const exists = prev.some(
+          (teacher) =>
+            teacher.id === currentUser.id ||
+            teacher.email.toLowerCase() === currentUser.email.toLowerCase()
+        );
+        if (exists) return prev;
+
+        return [
+          {
+            id: currentUser.id,
+            prefix: currentUser.prefix,
+            first_name: currentUser.first_name,
+            last_name: currentUser.last_name,
+            email: currentUser.email,
+            school_name: currentUser.school_name || 'Biotechnology & Life Sciences Academy',
+            department: currentUser.department || 'CTE Biomedical Science',
+            created_at: currentUser.created_at || new Date().toISOString(),
+          },
+          ...prev,
+        ];
+      });
+      setActiveTeacherIdState(currentUser.id);
+    }
+  }, [currentUser, environment]);
+
   // Active student resolver
   const currentStudent: StudentOverview = React.useMemo(() => {
     if (currentUser && currentUser.role === 'student') {
@@ -1724,7 +1777,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const recordExamSubmission = (attempt: QuizAttempt) => {
     setLastExamAttempt(attempt);
 
+    const targetStudentId = attempt.student_id || currentStudent.profile.id;
     const newSession: StudentActivitySession = {
+      student_id: targetStudentId,
       id: `sess_${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       formattedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -1742,8 +1797,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setActivitySessions((prev) => [...prev, newSession]);
-
-    const targetStudentId = attempt.student_id || currentStudent.profile.id;
 
     setStudents((prev) =>
       prev.map((s) => {
