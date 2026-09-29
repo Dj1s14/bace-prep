@@ -26,6 +26,7 @@ import { SpectrophotometryStation } from './SpectrophotometryStation';
 import { GelBandSizingStation } from './GelBandSizingStation';
 import { CentrifugeBalancingStation } from './CentrifugeBalancingStation';
 import { FormulaSheetDrawer } from './FormulaSheetDrawer';
+import { AdditionalPracticalStations } from './AdditionalPracticalStations';
 import { useApp } from '../../context/AppContext';
 
 export type BenchTab =
@@ -35,7 +36,8 @@ export type BenchTab =
   | 'gel'
   | 'centrifuge'
   | 'audit'
-  | 'rubric';
+  | 'rubric'
+  | 'practical';
 
 export const BenchSimulatorView: React.FC = () => {
   const { benchStats, overallReadiness, currentStudent } = useApp?.() || {};
@@ -224,14 +226,14 @@ export const BenchSimulatorView: React.FC = () => {
             }`}
           >
             <FlaskConical className="w-4 h-4 text-emerald-400" />
-            <span>Interactive Simulators & Drills (7 Stations)</span>
+            <span>Interactive Simulators & Drills (8 Stations)</span>
           </button>
         </div>
 
         <div className="text-xs text-slate-500 hidden md:block px-3">
           {simulatorMode === 'theory'
             ? 'Walk through core lab principles, dial mechanics, ALCOA+, and rubric standards.'
-            : 'Test your wet-lab reflexes and calculations across 7 interactive stations.'}
+            : 'Test your wet-lab reflexes and calculations across 8 interactive stations.'}
         </div>
       </div>
 
@@ -250,7 +252,7 @@ export const BenchSimulatorView: React.FC = () => {
         />
       ) : (
         <div className="space-y-6">
-          {/* Sub-Station Navigation Tabs for Drills: All 7 Stations */}
+          {/* Sub-Station Navigation Tabs for Drills */}
           <div className="flex items-center gap-1.5 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs overflow-x-auto scrollbar-thin">
             {[
               {
@@ -302,6 +304,13 @@ export const BenchSimulatorView: React.FC = () => {
                 badge: 'Official',
                 badgeColor: 'bg-rose-100 text-rose-800',
               },
+              {
+                id: 'practical',
+                label: 'Practical Stations+',
+                icon: Eye,
+                badge: '6 Skills',
+                badgeColor: 'bg-cyan-100 text-cyan-800',
+              },
             ].map((tab) => {
               const active = activeTab === tab.id;
               const Icon = tab.icon;
@@ -339,6 +348,7 @@ export const BenchSimulatorView: React.FC = () => {
             {activeTab === 'centrifuge' && <CentrifugeBalancingStation />}
             {activeTab === 'audit' && <NotebookAuditChallenge />}
             {activeTab === 'rubric' && <PracticalRubricsView />}
+            {activeTab === 'practical' && <AdditionalPracticalStations />}
           </div>
         </div>
       )}
