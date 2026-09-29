@@ -132,9 +132,6 @@ interface AppContextType {
   loginUser: (email: string, password?: string, preferredRole?: UserRole) => Promise<{ success: boolean; error?: string }>;
   signOut: () => void;
 
-  // Faculty Access Code Security
-  facultyAccessCode: string;
-  updateFacultyAccessCode: (newCode: string) => void;
   isFacultyPreviewingStudent: boolean;
   returnToFacultyConsole: () => void;
 
@@ -469,28 +466,6 @@ export const DEMO_SEED_TEACHER: TeacherProfile = {
   created_at: new Date().toISOString(),
 };
 
-export const DEFAULT_FACULTY_ACCESS_CODE = 'WAGNER-FACULTY-2026';
-
-export const getValidFacultyAccessCodes = (): string[] => {
-  const codes = [DEFAULT_FACULTY_ACCESS_CODE, 'BACE-TEACHER-CTE', 'CTE-FACULTY-PASS', 'WAGNER2026'];
-  try {
-    const custom = localStorage.getItem('bace_faculty_access_code');
-    if (custom && custom.trim()) codes.push(custom.trim().toUpperCase());
-  } catch {}
-  return codes;
-};
-
-export const DEFAULT_ADMIN_ACCESS_CODE = 'WAGNER-ADMIN-2026';
-
-export const getValidAdminAccessCodes = (): string[] => {
-  const codes = [DEFAULT_ADMIN_ACCESS_CODE, 'ADMIN2026', 'BACE-ADMIN-MASTER', 'CTE-ADMIN-PASS', 'WAGNER-CTE-ADMIN-2026'];
-  try {
-    const custom = localStorage.getItem('bace_admin_access_code');
-    if (custom && custom.trim()) codes.push(custom.trim().toUpperCase());
-  } catch {}
-  return codes;
-};
-
 const initializeEnvironments = () => {
   try {
     const initialized = localStorage.getItem('bace_env_initialized_v3');
@@ -683,24 +658,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
     } catch {}
   }, []);
-
-  // Faculty Authorization Key State
-  const [facultyAccessCode, setFacultyAccessCodeState] = useState<string>(() => {
-    try {
-      return localStorage.getItem('bace_faculty_access_code') || DEFAULT_FACULTY_ACCESS_CODE;
-    } catch {
-      return DEFAULT_FACULTY_ACCESS_CODE;
-    }
-  });
-
-  const updateFacultyAccessCode = (newCode: string) => {
-    const trimmed = newCode.trim().toUpperCase();
-    if (!trimmed) return;
-    setFacultyAccessCodeState(trimmed);
-    try {
-      localStorage.setItem('bace_faculty_access_code', trimmed);
-    } catch {}
-  };
 
   // Supabase Google Auth State
   const [googleUser, setGoogleUser] = useState<GoogleUserInfo | null>(() => {
@@ -2488,8 +2445,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginDemoStudent,
         loginDemoTeacher,
         loginDemoAdmin,
-        facultyAccessCode,
-        updateFacultyAccessCode,
         isFacultyPreviewingStudent,
         returnToFacultyConsole,
         resetAllData,
