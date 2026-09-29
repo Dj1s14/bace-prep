@@ -46,7 +46,6 @@ export const TeacherClassesView: React.FC = () => {
     purgeDemoData,
     transferStudentPeriod,
     regenerateClassJoinCode,
-    resetStudentAccess,
     deleteStudentAccount,
   } = useApp();
 
@@ -150,13 +149,9 @@ export const TeacherClassesView: React.FC = () => {
   };
 
   const handleInitiateResetAccess = (student: StudentOverview) => {
-    const result = resetStudentAccess(student.profile.id);
-    setResetModalData({
-      studentName: result.studentName,
-      tempPassword: result.tempPassword,
-      studentEmail: student.profile.email,
-    });
-    setCopiedResetPassword(false);
+    showNotification(
+      `Password resets for ${student.profile.first_name} ${student.profile.last_name} must be performed through Supabase Auth administration. No temporary password was generated.`
+    );
   };
 
   const handleConfirmRemoveStudent = () => {
@@ -401,7 +396,7 @@ export const TeacherClassesView: React.FC = () => {
                 {activeClass.name} — Student Roster ({classStudents.length})
               </h2>
               <p className="text-xs text-slate-500">
-                Manage enrollment, initiate period transfers, reset student passwords, and inspect BACE domain readiness.
+                Manage enrollment, initiate period transfers, review account-reset guidance, and inspect BACE domain readiness.
               </p>
             </div>
 
@@ -534,10 +529,10 @@ export const TeacherClassesView: React.FC = () => {
                           <button
                             onClick={() => handleInitiateResetAccess(stu)}
                             className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center space-x-1"
-                            title="Issue temporary credentials"
+                            title="Password reset requires Supabase Auth administration"
                           >
                             <Lock className="w-3 h-3" />
-                            <span>Reset</span>
+                            <span>Reset Info</span>
                           </button>
 
                           {/* Remove Student */}
