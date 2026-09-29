@@ -53,6 +53,7 @@ export const AdminPortal: React.FC = () => {
     googleUser,
     openAuthModal,
     resetAllData,
+    isProduction,
   } = useApp();
 
   // Local tab override or use adminPage from context
@@ -162,6 +163,11 @@ export const AdminPortal: React.FC = () => {
   // Create Teacher handler
   const handleCreateTeacher = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProduction) {
+      showNotice('Production teacher identities must be provisioned in Supabase Auth; no local teacher account was created.');
+      setIsAddTeacherOpen(false);
+      return;
+    }
     if (!newTFirstName.trim() || !newTLastName.trim() || !newTEmail.trim()) return;
 
     createTeacherAccount({
@@ -403,8 +409,8 @@ export const AdminPortal: React.FC = () => {
                   <Briefcase className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-teal-700">Add Real Teacher</div>
-                  <div className="text-[10px] text-slate-500">Create verified instructor</div>
+                  <div className="text-xs font-bold text-slate-900 group-hover:text-teal-700">Provision Teacher</div>
+                  <div className="text-[10px] text-slate-500">Supabase Auth administrator action</div>
                 </div>
               </button>
 
@@ -520,7 +526,7 @@ export const AdminPortal: React.FC = () => {
                     onClick={() => setIsAddTeacherOpen(true)}
                     className="mt-3 text-xs font-semibold text-teal-600 hover:underline"
                   >
-                    + Add first real teacher
+                    + Provision first teacher
                   </button>
                 </div>
               ) : (
@@ -806,13 +812,13 @@ export const AdminPortal: React.FC = () => {
                 <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-sm font-bold text-slate-800">No Teachers Found</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                  Add a verified instructor to begin assigning BACE coursework.
+                  Provision a verified instructor in Supabase Auth to begin assigning BACE coursework.
                 </p>
                 <button
                   onClick={() => setIsAddTeacherOpen(true)}
                   className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-xs"
                 >
-                  + Add Teacher Account
+                  + Provision Teacher
                 </button>
               </div>
             ) : (
@@ -1204,7 +1210,7 @@ export const AdminPortal: React.FC = () => {
             <div className="bg-teal-700 text-white px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Briefcase className="w-5 h-5" />
-                <h3 className="text-sm font-bold">Add Real Verified Teacher</h3>
+                <h3 className="text-sm font-bold">Provision Verified Teacher</h3>
               </div>
               <button
                 onClick={() => setIsAddTeacherOpen(false)}
@@ -1297,7 +1303,7 @@ export const AdminPortal: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition-colors shadow-xs"
                 >
-                  Create Teacher Account
+                  Provision Teacher
                 </button>
               </div>
             </form>
