@@ -21,6 +21,7 @@ import { DOMAIN_8_QUESTIONS } from './domain8_experimental_design';
 import { DOMAIN_8_EXPANSION_QUESTIONS } from './domain8_expansion';
 import { DOMAIN_LESSONS_QUESTIONS } from './domain_lessons_questions';
 import { BACE_EXTRA_QUESTIONS } from '../baceCurriculumData';
+import { COVERAGE_EXPANSION_QUESTIONS } from './coverage_expansion';
 
 export const ALL_QUESTIONS: Question[] = [
   ...LESSON_PIPETTE_QUESTIONS,
@@ -29,6 +30,7 @@ export const ALL_QUESTIONS: Question[] = [
   ...LESSON_MATH_MOLARITY_QUESTIONS,
   ...DOMAIN_LESSONS_QUESTIONS,
   ...BACE_EXTRA_QUESTIONS,
+  ...COVERAGE_EXPANSION_QUESTIONS,
   ...DOMAIN_1_QUESTIONS,
   ...DOMAIN_1_EXPANSION_QUESTIONS,
   ...DOMAIN_2_QUESTIONS,
@@ -69,5 +71,6 @@ export {
   DOMAIN_7_EXPANSION_QUESTIONS,
   DOMAIN_8_QUESTIONS,
   DOMAIN_8_EXPANSION_QUESTIONS,
+  COVERAGE_EXPANSION_QUESTIONS,
 };
 
