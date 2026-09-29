@@ -1637,8 +1637,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateTeacherAccount = (id: string, updates: Partial<TeacherProfile>) => {
     setTeachers((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+      prev.map((teacher) => (teacher.id === id ? { ...teacher, ...updates } : teacher))
     );
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        const profileUpdates: Partial<Profile> = {
+          prefix: updates.prefix,
+          first_name: updates.first_name,
+          last_name: updates.last_name,
+          email: updates.email,
+          school_name: updates.school_name,
+          department: updates.department,
+        };
+        Object.keys(profileUpdates).forEach((key) => {
+          if ((profileUpdates as any)[key] === undefined) delete (profileUpdates as any)[key];
+        });
+        void cloudUpdateStudentProfile(sb, id, profileUpdates).catch(async (err) => {
+          console.error('Unable to update shared teacher profile:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const deleteTeacherAccount = (id: string) => {
