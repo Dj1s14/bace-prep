@@ -53,7 +53,7 @@ export const TeacherMockExamsView: React.FC = () => {
     },
     {
       id: 'full',
-      title: 'Full BACE Official Simulation (100 Questions)',
+      title: 'Full BACE Current-Format Simulation (124 Questions)',
       duration: '4 Hours (240 Min)',
       avgScore: overallAvg,
       totalTakers: totalTakers,
