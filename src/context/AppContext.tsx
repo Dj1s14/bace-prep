@@ -2649,7 +2649,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createStudentAccount,
         updateStudentAccount,
         deleteStudentAccount,
-        createTestStudent,
         isAccountModalOpen,
         setIsAccountModalOpen,
         accountModalTab,
