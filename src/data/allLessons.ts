@@ -898,6 +898,6 @@ export const ALL_LESSONS: Lesson[] = [
         content: 'Linear regression calculates the best-fit line through standard data points. The R^2 value indicates the proportion of variance explained by the model. Values below 0.98 signify pipetting inaccuracy, sample degradation, or detector saturation.'
       }
     ]
-  }
+  },
   ...COVERAGE_EXPANSION_LESSONS,
 ];
