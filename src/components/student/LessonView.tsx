@@ -28,6 +28,7 @@ import { DomainIcon } from '../common/DomainIcon';
 import { LessonBenchGuide } from './LessonBenchGuide';
 import { LessonLabActivities } from './LessonLabActivities';
 import { AdaptiveMasteryModule } from './AdaptiveMasteryModule';
+import { LessonStudyToolkit } from './LessonStudyToolkit';
 import { ALL_MASTERY_LESSONS, getMasteryLesson } from '../../data/mastery';
 import { cleanQuestionText } from '../../utils/questionUtils';
 import { Lesson, BenchSkillTopic, LabActivityScenario } from '../../types/database';
@@ -204,7 +205,7 @@ export const LessonView: React.FC = () => {
 
 
   // Active module view tab: theory, bench protocol guide, troubleshooting scenarios, assessment, or mastery
-  const [activeTab, setActiveTab] = useState<'theory' | 'bench_guide' | 'activities' | 'assessment' | 'mastery'>('theory');
+  const [activeTab, setActiveTab] = useState<'study' | 'theory' | 'bench_guide' | 'activities' | 'assessment' | 'mastery'>('study');
 
   // Mastery lesson for current lesson
   const defaultMasteryLesson = useMemo(() => {
@@ -460,6 +461,18 @@ export const LessonView: React.FC = () => {
       {/* Lesson Navigation Tabs: Theory, Bench Guide, Troubleshooting Scenarios, Assessment, Mastery */}
       <div className="flex items-center space-x-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto scrollbar-none shadow-2xs">
         <button
+          onClick={() => setActiveTab('study')}
+          className={`flex-1 min-w-[155px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
+            activeTab === 'study'
+              ? 'bg-white text-violet-700 shadow-2xs'
+              : 'text-violet-700 hover:text-violet-900 hover:bg-white/50'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-violet-600" />
+          <span>Study Sheet</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('theory')}
           className={`flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
             activeTab === 'theory'
@@ -531,6 +544,11 @@ export const LessonView: React.FC = () => {
           </span>
         </button>
       </div>
+
+      {/* STUDY SHEET: ACTIVE RECALL & HIGH-YIELD REVIEW */}
+      {activeTab === 'study' && (
+        <LessonStudyToolkit lesson={lesson} />
+      )}
 
       {/* TAB 1: CURRICULUM THEORY */}
       {activeTab === 'theory' && (
