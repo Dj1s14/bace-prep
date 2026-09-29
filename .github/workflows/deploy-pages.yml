@@ -36,7 +36,9 @@ jobs:
       - name: Type-check
         id: typecheck
         continue-on-error: true
-        run: npm run lint 2>&1 | tee tsc.log
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee tsc.log
 
       - name: Upload type-check log
         if: always()
@@ -52,7 +54,9 @@ jobs:
       - name: Build static site
         id: buildsite
         continue-on-error: true
-        run: npm run build:pages 2>&1 | tee vite-build.log
+        run: |
+          set -o pipefail
+          npm run build:pages 2>&1 | tee vite-build.log
         env:
           VITE_BASE_PATH: /bace-prep/
           VITE_SUPABASE_URL: https://gfdbcrfqbsowlbnprqqn.supabase.co
@@ -73,7 +77,10 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Package Pages artifact
-        run: tar -C dist -cf "${{ runner.temp }}/artifact.tar" .
+        run: |
+          test -d dist
+          ls -la dist
+          tar -C dist -cf "${{ runner.temp }}/artifact.tar" .
 
       - name: Upload Pages artifact
         uses: actions/upload-artifact@v4
