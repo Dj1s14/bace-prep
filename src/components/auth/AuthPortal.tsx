@@ -18,7 +18,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { useApp, DEFAULT_FACULTY_ACCESS_CODE, DEFAULT_ADMIN_ACCESS_CODE } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types/database';
 
 export const AuthPortal: React.FC = () => {
@@ -56,12 +56,12 @@ export const AuthPortal: React.FC = () => {
   const [tPassword, setTPassword] = useState('');
   const [tSchool, setTSchool] = useState('Wagner High School');
   const [tDepartment, setTDepartment] = useState('CTE Biomedical Science');
-  const [tAccessCode, setTAccessCode] = useState(DEFAULT_FACULTY_ACCESS_CODE);
+  const [tAccessCode, setTAccessCode] = useState('');
 
   // Administrator Sign-Up Fields (Protected by Master Key)
-  const [aFirstName, setAFirstName] = useState('Derrick');
-  const [aLastName, setALastName] = useState('Jones');
-  const [aEmail, setAEmail] = useState('dcjones1441@gmail.com');
+  const [aFirstName, setAFirstName] = useState('');
+  const [aLastName, setALastName] = useState('');
+  const [aEmail, setAEmail] = useState('');
   const [aPassword, setAPassword] = useState('');
   const [aSchool, setASchool] = useState('Wagner High School');
   const [aDepartment, setADepartment] = useState('Biomedical CTE Administration & Leadership');
@@ -73,12 +73,14 @@ export const AuthPortal: React.FC = () => {
 
   // UI state
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Handle Student Registration
   const handleStudentSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     if (!sFirstName.trim() || !sLastName.trim()) {
       setErrorMsg('Please enter both your first and last name.');
@@ -106,6 +108,8 @@ export const AuthPortal: React.FC = () => {
 
     if (!res.success && res.error) {
       setErrorMsg(res.error);
+    } else if (res.success) {
+      setSuccessMsg('Student account created. If email confirmation is enabled, check your inbox and confirm your address before signing in.');
     }
   };
 
@@ -113,6 +117,7 @@ export const AuthPortal: React.FC = () => {
   const handleTeacherSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     if (!tFirstName.trim() || !tLastName.trim()) {
       setErrorMsg('Please enter your first and last name.');
@@ -127,7 +132,7 @@ export const AuthPortal: React.FC = () => {
       return;
     }
     if (!tAccessCode.trim()) {
-      setErrorMsg('Faculty Authorization Key is required. Please enter the authorized faculty key (e.g. WAGNER-FACULTY-2026).');
+      setErrorMsg('Faculty Authorization Key is required. Please enter the authorized faculty key (Provisioned by administrator).');
       return;
     }
 
@@ -153,6 +158,7 @@ export const AuthPortal: React.FC = () => {
   const handleAdminSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     if (!aFirstName.trim() || !aLastName.trim()) {
       setErrorMsg('Please enter both your first and last name.');
@@ -192,14 +198,15 @@ export const AuthPortal: React.FC = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     if (!loginEmail.trim() || !loginEmail.includes('@')) {
       setErrorMsg('Please enter your registered email address.');
       return;
     }
 
-    if (activePortal === 'admin' && (!loginPassword || loginPassword.trim().length === 0)) {
-      setErrorMsg('Administrator password is required.');
+    if (!loginPassword || loginPassword.trim().length === 0) {
+      setErrorMsg('Password is required.');
       return;
     }
 
@@ -215,6 +222,7 @@ export const AuthPortal: React.FC = () => {
   // Google OAuth button handler
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
+    setSuccessMsg(null);
     setLoading(true);
     const res = await signInWithGoogle(activePortal);
     setLoading(false);
@@ -276,6 +284,7 @@ export const AuthPortal: React.FC = () => {
                   onClick={() => {
                     setActivePortal('student');
                     setErrorMsg(null);
+    setSuccessMsg(null);
                   }}
                   className="text-xs text-indigo-300 hover:text-white px-3 py-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 border border-indigo-700/60 transition-colors cursor-pointer"
                 >
@@ -289,6 +298,7 @@ export const AuthPortal: React.FC = () => {
                   onClick={() => {
                     setActivePortal('student');
                     setErrorMsg(null);
+    setSuccessMsg(null);
                   }}
                   className={`flex items-center justify-center space-x-1.5 py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activePortal === 'student'
@@ -304,7 +314,10 @@ export const AuthPortal: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setActivePortal('teacher');
+                    setAuthMode('sign_in');
                     setErrorMsg(null);
+                    setSuccessMsg(null);
+    setSuccessMsg(null);
                   }}
                   className={`flex items-center justify-center space-x-1.5 py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     activePortal === 'teacher'
@@ -356,6 +369,7 @@ export const AuthPortal: React.FC = () => {
                     onClick={() => {
                       setAuthMode('sign_in');
                       setErrorMsg(null);
+    setSuccessMsg(null);
                     }}
                     className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
                       authMode === 'sign_in' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-white'
@@ -368,6 +382,7 @@ export const AuthPortal: React.FC = () => {
                     onClick={() => {
                       setAuthMode('sign_up');
                       setErrorMsg(null);
+    setSuccessMsg(null);
                     }}
                     className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
                       authMode === 'sign_up' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-white'
@@ -385,19 +400,14 @@ export const AuthPortal: React.FC = () => {
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <span>{errorMsg}</span>
-                  {errorMsg.includes('Faculty Authorization Key') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTAccessCode(DEFAULT_FACULTY_ACCESS_CODE);
-                        setErrorMsg(null);
-                      }}
-                      className="mt-2 block bg-teal-900/80 hover:bg-teal-800 border border-teal-600 text-teal-200 font-mono text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Autofill Wagner Faculty Key: {DEFAULT_FACULTY_ACCESS_CODE}
-                    </button>
-                  )}
                 </div>
+              </div>
+            )}
+
+            {successMsg && (
+              <div className="mx-6 my-2 p-3 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-300 text-xs flex items-start space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span>{successMsg}</span>
               </div>
             )}
 
@@ -652,13 +662,13 @@ export const AuthPortal: React.FC = () => {
                         required
                         value={tAccessCode}
                         onChange={(e) => setTAccessCode(e.target.value.toUpperCase())}
-                        placeholder="e.g. WAGNER-FACULTY-2026"
+                        placeholder="Provisioned by administrator"
                         className="w-full bg-slate-950/90 border border-teal-600/80 rounded-xl pl-9 pr-3 py-2 text-xs text-teal-100 placeholder-teal-600/60 font-mono tracking-wider focus:outline-none focus:border-teal-400 uppercase"
                       />
                     </div>
                     <p className="text-[10px] text-teal-300/80 flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-teal-400" />
-                      <span>Security key required to create educator consoles. Default Wagner key is <strong className="font-mono text-teal-200">WAGNER-FACULTY-2026</strong>.</span>
+                      <span>Security key required to create educator consoles. Teacher roles are provisioned through trusted Supabase administration.</span>
                     </p>
                   </div>
 
@@ -718,7 +728,7 @@ export const AuthPortal: React.FC = () => {
                         required
                         value={aEmail}
                         onChange={(e) => setAEmail(e.target.value)}
-                        placeholder="dcjones1441@gmail.com"
+                        placeholder="administrator@school.edu"
                         className="w-full bg-slate-950/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -936,6 +946,7 @@ export const AuthPortal: React.FC = () => {
                   onClick={() => {
                     setActivePortal(activePortal === 'admin' ? 'student' : 'admin');
                     setErrorMsg(null);
+    setSuccessMsg(null);
                   }}
                   className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors flex items-center gap-1 cursor-pointer"
                 >
