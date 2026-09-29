@@ -49,11 +49,24 @@ jobs:
         run: exit 1
 
       - name: Build static site
-        run: npm run build:pages
+        id: buildsite
+        continue-on-error: true
+        run: npm run build:pages 2>&1 | tee vite-build.log
         env:
           VITE_BASE_PATH: /bace-prep/
           VITE_SUPABASE_URL: https://gfdbcrfqbsowlbnprqqn.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_zo9w_tbm9sgRfSjT52sXXA_WaFcZwF5
+
+      - name: Upload Vite build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-build-log
+          path: vite-build.log
+
+      - name: Fail if build failed
+        if: steps.buildsite.outcome == 'failure'
+        run: exit 1
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
