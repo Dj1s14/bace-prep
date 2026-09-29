@@ -71,10 +71,16 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Package Pages artifact
+        run: tar --dereference --hard-dereference --directory dist -cvf "${{ runner.temp }}/artifact.tar" --exclude=.git --exclude=.github .
+
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          path: dist
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
   deploy:
     environment:
