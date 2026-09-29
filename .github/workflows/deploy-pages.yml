@@ -1,5 +1,6 @@
 name: Deploy BACE Prep to GitHub Pages
 # Pages enabled; this workflow also serves as the production build check.
+# Manual artifact packaging is used for reliable deploy-pages handoff.
 
 on:
   push:
