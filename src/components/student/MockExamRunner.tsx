@@ -33,14 +33,15 @@ export const MockExamRunner: React.FC = () => {
     const selected: Question[] = [];
     const usedIds = new Set<string>();
 
-    // Step 1: Sample questions proportionally by domain exam_weight
+    // Step 1: Allocate exact integer targets from published category point weights.
+    // These are simulation targets, not a claim about unpublished current item counts.
+    const domainTargets = allocateQuestionsByPointWeight(totalNeeded);
     domains.forEach((d) => {
       const domainQs = questions
         .filter((q) => q.domain_id === d.id && q.active !== false)
         .sort(() => 0.5 - Math.random());
 
-      const weightFraction = (d.exam_weight || 12) / 100;
-      const targetCount = Math.max(1, Math.round(totalNeeded * weightFraction));
+      const targetCount = domainTargets[d.id] || 0;
       const countToTake = Math.min(targetCount, domainQs.length);
 
       for (let i = 0; i < countToTake; i++) {
