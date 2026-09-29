@@ -672,6 +672,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.removeItem(STORAGE_KEYS.USER_CREDENTIALS);
       localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+      localStorage.removeItem(STORAGE_KEYS.STUDENTS);
+      localStorage.removeItem(STORAGE_KEYS.TEACHERS);
+      localStorage.removeItem(STORAGE_KEYS.CLASSES);
+      localStorage.removeItem(STORAGE_KEYS.ASSIGNMENTS);
+      localStorage.removeItem(STORAGE_KEYS.ACTIVITY_SESSIONS);
+      localStorage.removeItem(STORAGE_KEYS.LESSON_GRADES);
     } catch {}
   }, []);
 
@@ -830,45 +836,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Synchronize isolated storage per active environment
   useEffect(() => {
-    saveEnvData(environment, 'students', students);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'students', students);
   }, [students, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'teachers', teachers);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(teachers));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'teachers', teachers);
   }, [teachers, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'classes', classes);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'classes', classes);
   }, [classes, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'assignments', assignments);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'assignments', assignments);
   }, [assignments, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'activity_sessions', activitySessions);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.ACTIVITY_SESSIONS, JSON.stringify(activitySessions));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'activity_sessions', activitySessions);
   }, [activitySessions, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'lesson_grades', lessonGrades);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.LESSON_GRADES, JSON.stringify(lessonGrades));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'lesson_grades', lessonGrades);
   }, [lessonGrades, environment]);
 
   // Authenticated identity is restored only from the Supabase session.
@@ -1422,23 +1410,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const cleanEmail = data.email.trim().toLowerCase();
-    let matchedClass = data.class_id ? classes.find((c) => c.id === data.class_id) : undefined;
-
-    if (!matchedClass && data.class_join_code?.trim()) {
-      const { data: classRow, error: classError } = await sb
-        .from('school_classes')
-        .select('*')
-        .eq('join_code', data.class_join_code.trim().toUpperCase())
-        .maybeSingle();
-
-      if (classError) {
-        return { success: false, error: 'Unable to verify the class join code.' };
-      }
-      if (!classRow) {
-        return { success: false, error: 'That class join code was not found.' };
-      }
-      matchedClass = classRow as SchoolClass;
-    }
 
     const { data: authData, error } = await sb.auth.signUp({
       email: cleanEmail,
@@ -1448,8 +1419,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           first_name: data.first_name.trim(),
           last_name: data.last_name.trim(),
           role: 'student',
-          class_id: matchedClass?.id || data.class_id || undefined,
-          school_name: data.school_name || matchedClass?.name || undefined,
+          class_join_code: data.class_join_code?.trim().toUpperCase() || undefined,
+          school_name: data.school_name || undefined,
           target_exam_date: data.target_exam_date || undefined,
         },
       },
