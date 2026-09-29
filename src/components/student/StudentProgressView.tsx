@@ -124,7 +124,7 @@ export const StudentProgressView: React.FC = () => {
                 <span>Demo: Simulate Practice (+90%)</span>
               </button>
             </div>
-          )>
+          )}
         </div>
 
         {/* Live Simulation Feedback Toast */}
