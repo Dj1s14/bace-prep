@@ -33,6 +33,21 @@ import {
 } from '../data/initialData';
 import { cleanQuestionText } from '../utils/questionUtils';
 import { getSupabase } from '../lib/supabase';
+import {
+  fetchCloudWorkspace,
+  cloudCreateAssignment,
+  cloudCreateClass,
+  cloudDeleteActivitySession,
+  cloudDeleteAssignment,
+  cloudDeleteClass,
+  cloudInsertActivitySession,
+  cloudInsertLessonGrade,
+  cloudInsertQuizAttempt,
+  cloudUpdateLessonGrade,
+  cloudUpdateStudentProfile,
+  cloudUpsertAssignmentProgress,
+  cloudUpsertLessonProgress,
+} from '../lib/cloudData';
 
 export type StudentNavPage =
   | 'dashboard'
@@ -697,13 +712,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [classes, setClasses] = useState<SchoolClass[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'classes', INITIAL_CLASSES);
+    return env === 'demo' ? loadEnvData(env, 'classes', INITIAL_CLASSES) : [];
   });
 
   // Isolated Teachers State
   const [teachers, setTeachers] = useState<TeacherProfile[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'teachers', env === 'demo' ? [DEMO_SEED_TEACHER] : INITIAL_TEACHERS);
+    return env === 'demo' ? loadEnvData(env, 'teachers', [DEMO_SEED_TEACHER]) : [];
   });
 
   const [activeTeacherId, setActiveTeacherIdState] = useState<string>(() => {
@@ -727,7 +742,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Isolated Students State
   const [students, setStudents] = useState<StudentOverview[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'students', env === 'demo' ? [DEMO_SEED_STUDENT] : INITIAL_STUDENTS_ROSTER);
+    return env === 'demo' ? loadEnvData(env, 'students', [DEMO_SEED_STUDENT]) : [];
   });
 
   const [activeStudentId, setActiveStudentIdState] = useState<string>(() => {
@@ -777,7 +792,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Assignments
   const [assignments, setAssignments] = useState<Assignment[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'assignments', INITIAL_ASSIGNMENTS);
+    return env === 'demo' ? loadEnvData(env, 'assignments', INITIAL_ASSIGNMENTS) : [];
   });
 
   // Assignment Progress per student
@@ -803,13 +818,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Activity Sessions
   const [activitySessions, setActivitySessions] = useState<StudentActivitySession[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'activity_sessions', INITIAL_ACTIVITY_SESSIONS);
+    return env === 'demo' ? loadEnvData(env, 'activity_sessions', INITIAL_ACTIVITY_SESSIONS) : [];
   });
 
   // Lesson Grades
   const [lessonGrades, setLessonGrades] = useState<LessonGradeRecord[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES);
+    return env === 'demo' ? loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES) : [];
   });
 
   // Synchronize isolated storage per active environment
@@ -1100,6 +1115,120 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const refreshCloudWorkspace = async (profile: Profile) => {
+    if (environment !== 'production') return;
+    const sb = getSupabase();
+    if (!sb) return;
+
+    try {
+      const workspace = await fetchCloudWorkspace(sb);
+
+      setClasses(workspace.classes);
+      setAssignments(workspace.assignments);
+      setLessonGrades(workspace.lessonGrades);
+      setActivitySessions(workspace.activitySessions);
+      setAssignmentProgress(workspace.assignmentProgress);
+
+      const completedMap: Record<string, string[]> = {};
+      workspace.lessonProgress
+        .filter((row) => row.completed)
+        .forEach((row) => {
+          completedMap[row.student_id] = [...(completedMap[row.student_id] || []), row.lesson_id];
+        });
+      setStudentCompletedLessonsMap(completedMap);
+
+      const studentProfiles = workspace.profiles.filter((item) => item.role === 'student');
+      const rebuiltStudents: StudentOverview[] = studentProfiles.map((studentProfile) => {
+        const attempts = workspace.quizAttempts.filter((attempt) => attempt.student_id === studentProfile.id);
+        const sessions = workspace.activitySessions.filter((session) => session.student_id === studentProfile.id);
+        const completedLessons = completedMap[studentProfile.id] || [];
+        const totalQuestions = attempts.reduce((sum, attempt) => sum + (attempt.total_questions || 0), 0);
+        const totalCorrect = attempts.reduce((sum, attempt) => sum + (attempt.score || 0), 0);
+        const accuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+
+        const masteryTotals: Record<string, { weighted: number; weight: number }> = {};
+        attempts.forEach((attempt) => {
+          if (attempt.domain_breakdown) {
+            Object.entries(attempt.domain_breakdown).forEach(([domainId, stats]: [string, any]) => {
+              const q = Number(stats?.total || stats?.total_questions || 1);
+              const pct = Number(stats?.percentage || 0);
+              const current = masteryTotals[domainId] || { weighted: 0, weight: 0 };
+              current.weighted += pct * q;
+              current.weight += q;
+              masteryTotals[domainId] = current;
+            });
+          } else if (attempt.domain_id) {
+            const q = Number(attempt.total_questions || 1);
+            const current = masteryTotals[attempt.domain_id] || { weighted: 0, weight: 0 };
+            current.weighted += Number(attempt.percentage || 0) * q;
+            current.weight += q;
+            masteryTotals[attempt.domain_id] = current;
+          }
+        });
+
+        const domainMastery: Record<string, number> = {};
+        domains.forEach((domain) => {
+          const stat = masteryTotals[domain.id];
+          domainMastery[domain.id] = stat?.weight ? Math.round(stat.weighted / stat.weight) : 0;
+        });
+
+        const readiness = Math.round(
+          domains.reduce(
+            (sum, domain) => sum + (domainMastery[domain.id] || 0) * (domain.exam_weight / 100),
+            0
+          )
+        );
+
+        return {
+          profile: studentProfile,
+          class_id: studentProfile.class_id || '',
+          overall_readiness: readiness,
+          domain_mastery: domainMastery,
+          last_active: sessions.length > 0 ? sessions[sessions.length - 1].formattedDate || 'Recent' : 'Enrolled',
+          status: readiness >= 80 ? 'Ready' : readiness >= 70 ? 'Developing' : readiness >= 60 ? 'Needs Review' : 'At Risk',
+          lessons_completed: completedLessons.length,
+          questions_attempted: totalQuestions,
+          accuracy,
+          mock_exam_scores: attempts
+            .filter((attempt) => String(attempt.quiz_type).startsWith('mock'))
+            .map((attempt) => Number(attempt.percentage || 0)),
+          weakest_topics: [],
+          strongest_topics: [],
+          recent_activities: sessions
+            .slice(-5)
+            .reverse()
+            .map((session) => ({
+              type: session.type === 'Mock Exam' ? 'Mock Exam' : 'Practice Set',
+              description: session.label || session.type,
+              date: session.formattedDate || 'Recent',
+              score: `${session.score}/${session.totalQuestions} (${session.accuracy}%)`,
+            })),
+        };
+      });
+
+      setStudents(rebuiltStudents);
+
+      if (profile.role === 'teacher') {
+        setTeachers([
+          {
+            id: profile.id,
+            prefix: profile.prefix,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            email: profile.email,
+            school_name: profile.school_name || 'Biotechnology & Life Sciences Academy',
+            department: profile.department || 'CTE Biomedical Science',
+            created_at: profile.created_at || new Date().toISOString(),
+          },
+        ]);
+      } else if (profile.role === 'student') {
+        setTeachers([]);
+      }
+    } catch (err) {
+      console.error('Unable to load shared Supabase workspace:', err);
+    }
+  };
+
   // Supabase Auth is the single source of truth for production identity.
   // Privileged roles must already exist in public.profiles; new authenticated
   // users are provisioned as students only.
@@ -1174,6 +1303,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       setAdminPage('dashboard');
     }
+
+    await refreshCloudWorkspace(profile);
   };
 
   useEffect(() => {
