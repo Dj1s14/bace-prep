@@ -32,7 +32,20 @@ jobs:
         run: npm install
 
       - name: Type-check
-        run: npm run lint
+        id: typecheck
+        continue-on-error: true
+        run: npm run lint 2>&1 | tee tsc.log
+
+      - name: Upload type-check log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-log
+          path: tsc.log
+
+      - name: Fail if type-check failed
+        if: steps.typecheck.outcome == 'failure'
+        run: exit 1
 
       - name: Build static site
         run: npm run build:pages
