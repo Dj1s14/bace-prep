@@ -222,6 +222,10 @@ export const LessonView: React.FC = () => {
     }
   }, [lesson.id]);
 
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [lesson.id]);
+
   const activeMasteryLesson = useMemo(() => {
     return ALL_MASTERY_LESSONS.find(m => m.lesson_metadata.lesson_id === selectedMasteryLessonId) || defaultMasteryLesson;
   }, [selectedMasteryLessonId, defaultMasteryLesson]);
