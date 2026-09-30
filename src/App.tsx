@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { StudentSidebar } from './components/common/StudentSidebar';
@@ -44,6 +44,7 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
     returnToFacultyConsole,
     studentPage,
     teacherPage,
+    selectedLessonId,
   } = useApp();
 
   // Strict RBAC Enforcement:
@@ -107,6 +108,14 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
     }
   };
 
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (currentRole === 'student' && studentPage === 'lesson') {
+      mainScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [currentRole, studentPage, selectedLessonId]);
+
   // When taking a mock exam, give full focus without distracting sidebar
   const isTakingExam = currentRole === 'student' && studentPage === 'mock_exam_runner';
 
@@ -150,7 +159,7 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
           <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         )}
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 w-full relative">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 w-full relative">
           <div className="max-w-7xl mx-auto">
             {currentRole === 'student'
               ? renderStudentPage()
