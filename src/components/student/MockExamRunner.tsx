@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Clock,
   Flag,
@@ -80,6 +80,13 @@ export const MockExamRunner: React.FC = () => {
   const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
   const [showQuestionGrid, setShowQuestionGrid] = useState<boolean>(false);
+
+  const examRootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // The app scrolls its main panel, not the browser window.
+    examRootRef.current?.closest('main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [currentIndex]);
 
   // Timer logic
   const initialSeconds = (activeExamConfig?.timeLimitMinutes || 30) * 60;
@@ -184,9 +191,9 @@ export const MockExamRunner: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+    <div ref={examRootRef} className="max-w-4xl mx-auto space-y-6 pb-20">
       {/* Top Testing Header with Timer & Progress */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 lg:sticky lg:top-24 lg:z-20">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
             {activeExamConfig?.title || 'BACE Mock Exam'}
