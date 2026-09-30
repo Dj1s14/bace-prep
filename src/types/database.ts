@@ -137,6 +137,7 @@ export interface LabActivityScenario {
     id: string;
     text: string;
     is_correct: boolean;
+  explanation?: string;
     feedback: string;
   }>;
   explanation: string;
@@ -173,6 +174,7 @@ export interface QuestionChoice {
   question_id?: string;
   choice_text: string;
   is_correct: boolean;
+  explanation?: string;
   display_order?: number;
 }
 
@@ -212,6 +214,7 @@ export interface QuizAnswer {
   question_id: string;
   selected_choice_id: string;
   is_correct: boolean;
+  explanation?: string;
   answered_at: string;
 }
 

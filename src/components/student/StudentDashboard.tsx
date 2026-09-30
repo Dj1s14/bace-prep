@@ -1,3 +1,5 @@
+import { StudyPlan } from './StudyPlan';
+import { JoinClass } from './JoinClass';
 import React from 'react';
 import {
   Calendar,
@@ -58,6 +60,8 @@ export const StudentDashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
+      <JoinClass />
+      <StudyPlan />
       {/* Top Banner: Welcome & Readiness */}
       <section className="bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">

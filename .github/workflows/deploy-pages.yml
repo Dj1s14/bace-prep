@@ -31,7 +31,7 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Type-check
         id: typecheck
@@ -50,6 +50,9 @@ jobs:
       - name: Fail if type-check failed
         if: steps.typecheck.outcome == 'failure'
         run: exit 1
+
+      - name: Test learning upgrades
+        run: npm test
 
       - name: Build static site
         id: buildsite

@@ -88,7 +88,7 @@ export const StudentProgressView: React.FC = () => {
       completed_at: new Date().toISOString(),
       answers: [],
     };
-    recordExamSubmission(drillAttempt);
+    void recordExamSubmission(drillAttempt).catch(console.error);
     // Stay on progress page rather than auto-routing to exam results during direct simulation
     setStudentPage('progress');
     setSimulationToast('Logged 9/10 (90%) in Biotechnology Skills. Charts updated live!');

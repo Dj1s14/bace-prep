@@ -1,3 +1,4 @@
+import { WorkflowCoach } from './WorkflowCoach';
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, XCircle, RotateCcw, Microscope, Gauge, Flame, ShieldCheck, TestTubes, Grid3X3 } from 'lucide-react';
 
@@ -186,6 +187,18 @@ const STATIONS: Station[] = [
       },
     ],
   },
+  { id: 'pipette', title: 'Micropipette', subtitle: 'First stop, second stop, aspiration, and dispensing', icon: TestTubes, scenarios: [
+    {title: 'Avoid aspiration error', prompt: 'Where should the plunger stop before aspirating a calibrated volume?', options: [
+      {text:'First stop',correct:true,feedback:'The first stop gives the calibrated aspiration stroke.'},
+      {text:'Second stop',correct:false,feedback:'Starting at the second stop can aspirate excess volume; reserve it for blowout during dispensing.'},
+      {text:'Press after immersing',correct:false,feedback:'Prepare the plunger before immersion to avoid expelling air into the sample.'}],takeaway:'First stop to aspirate; second stop to blow out during dispensing.'}
+  ]},
+  { id: 'centrifuge', title: 'Centrifuge', subtitle: 'Mass balance, RCF, rotor checks, and safe opening', icon: Gauge, scenarios: [
+    {title:'Balance the rotor',prompt:'Two opposing tubes have equal volume but different liquid densities. What should you verify?',options:[
+      {text:'Their masses are balanced within the approved tolerance',correct:true,feedback:'Equal volumes do not guarantee equal masses when density differs.'},
+      {text:'They have the same label color',correct:false,feedback:'Label color is not a mechanical balance criterion.'},
+      {text:'Run faster to stabilize the tubes',correct:false,feedback:'Higher speed increases forces from imbalance; stop and correct the load.'}],takeaway:'Balance by mass and follow rotor and instrument limits.'}
+  ]},
 ];
 
 export const AdditionalPracticalStations: React.FC = () => {
@@ -225,7 +238,7 @@ export const AdditionalPracticalStations: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-black text-slate-900">Practical Stations+</h2>
-            <p className="text-xs text-slate-500 mt-1">Decision drills for six additional technician-level procedures.</p>
+            <p className="text-xs text-slate-500 mt-1">Decision drills and ordered workflows for eight technician-level procedures.</p>
           </div>
           <div className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">
             Score {score}/{attempted}
@@ -251,6 +264,7 @@ export const AdditionalPracticalStations: React.FC = () => {
         </div>
       </div>
 
+      <WorkflowCoach key={station.id} stationId={station.id} />
       <div className="bg-slate-950 text-white rounded-2xl p-5 md:p-6 shadow-lg">
         <div className="text-[10px] uppercase tracking-wider font-bold text-blue-300">{station.title}</div>
         <h3 className="text-lg font-black mt-1">{scenario.title}</h3>
@@ -281,7 +295,7 @@ export const AdditionalPracticalStations: React.FC = () => {
                   )}
                   <span>{option.text}</span>
                 </div>
-                {answered && (selected || option.correct) && (
+                {answered && (
                   <div className="text-xs text-slate-300 mt-2 pl-6">{option.feedback}</div>
                 )}
               </button>

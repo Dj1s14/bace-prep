@@ -1,0 +1,58 @@
+export const practicalWorkflows: Record<string, { title: string; domain: string; steps: Array<{ action: string; why: string }> }> = {
+ microscopy: { title: 'Microscope focus workflow', domain: 'd7', steps: [
+  {action:'Secure the slide and select the lowest-power objective',why:'A wide field makes it easier to locate the specimen without risking slide contact.'},
+  {action:'Center the specimen and bring it into focus at low power',why:'Centering prevents losing the target when the field narrows.'},
+  {action:'Increase magnification and adjust with fine focus',why:'Fine focus reduces the risk of objective-slide contact at high power.'},
+  {action:'Use immersion oil only with a compatible oil-immersion objective',why:'Oil improves light collection for the intended objective; it can contaminate dry objectives.'},
+  {action:'Clean optics with approved lens materials and record observations',why:'Approved cleaning protects lenses and documented observations support reproducibility.'},
+ ]},
+ ph: { title: 'pH measurement workflow', domain: 'd7', steps: [
+  {action:'Inspect the electrode and prepare fresh certified calibration buffers',why:'A damaged or dry electrode and contaminated buffers undermine the measurement.'},
+  {action:'Calibrate with buffers bracketing the expected pH, following the SOP',why:'Calibration establishes instrument response over the sample range.'},
+  {action:'Rinse and gently blot the electrode before measuring the sample',why:'This limits carryover without rubbing the sensitive surface.'},
+  {action:'Wait for a stable reading and record pH and temperature',why:'Temperature and stabilization affect how the reading is interpreted.'},
+  {action:'Rinse and store the electrode in its approved storage solution',why:'Correct storage protects the hydrated sensing membrane; follow the manufacturer.'},
+ ]},
+ autoclave: { title: 'Autoclave load workflow', domain: 'd3', steps: [
+  {action:'Check material compatibility and select the approved load SOP',why:'Not every material or chemical is safe to autoclave.'},
+  {action:'Prepare pressure-safe containers and allow steam circulation',why:'Sealed vessels can rupture; overpacking prevents steam contact.'},
+  {action:'Place required indicators and select the validated cycle for the load',why:'Indicators and a load-specific cycle help verify exposure; one cycle does not fit every load.'},
+  {action:'Wait until pressure is zero and the load has cooled as required',why:'Residual pressure and hot liquids can cause severe burns.'},
+  {action:'Use required PPE, unload safely, and document cycle evidence',why:'A successful cycle needs recorded physical and indicator evidence, including biological monitoring per SOP.'},
+ ]},
+ aseptic: { title: 'Biological safety cabinet workflow', domain: 'd3', steps: [
+  {action:'Confirm the cabinet is appropriate, certified, and operating per SOP',why:'A clean bench and a BSC offer different protection; equipment selection comes first.'},
+  {action:'Disinfect the work surface and arrange clean-to-dirty materials',why:'A planned layout reduces contamination and unnecessary movement.'},
+  {action:'Keep front and rear airflow grilles clear during work',why:'Blocked grilles disrupt protective airflow.'},
+  {action:'Perform deliberate aseptic transfers without crossing dirty items over clean work',why:'Controlled motion and segregation help preserve sample integrity.'},
+  {action:'Contain waste, disinfect surfaces, and follow shutdown timing',why:'Cleanup and approved shutdown reduce exposure and residual contamination.'},
+ ]},
+ serial: { title: 'Serial dilution workflow', domain: 'd4', steps: [
+  {action:'Label three tubes as 10⁻¹, 10⁻², and 10⁻³ and add 900 µL diluent to each',why:'Labels identify cumulative dilution; 900 µL plus 100 µL forms each tenfold step.'},
+  {action:'Transfer 100 µL original sample into the first tube with a fresh tip',why:'The first tube contains one part original sample in ten parts total.'},
+  {action:'Mix the first tube before transferring 100 µL into the second with a fresh tip',why:'Mixing creates a representative aliquot; the second tube is 10⁻² overall.'},
+  {action:'Mix the second tube and transfer 100 µL into the third with a fresh tip',why:'A third tenfold step produces a cumulative 1:1000 dilution.'},
+  {action:'Mix the final tube and document all transfer volumes and dilution factors',why:'A traceable dilution record is necessary for interpreting downstream counts.'},
+ ]},
+ counting: { title: 'Hemocytometer workflow', domain: 'd4', steps: [
+  {action:'Mix the culture and prepare a documented dye dilution',why:'A representative sample and known dilution factor are needed for concentration.'},
+  {action:'Load the chamber correctly without overflow or bubbles',why:'A correct chamber volume is essential for the count-to-volume conversion.'},
+  {action:'Count specified squares using a consistent boundary rule',why:'Counting two adjacent boundaries and excluding the opposite two avoids double counting.'},
+  {action:'Calculate average viable cells per square × chamber factor × dilution factor',why:'For a standard 1 mm² large square at 0.1 mm depth, the factor is 10⁴ per mL.'},
+  {action:'Report viable concentration, viability, and the counting method',why:'Concentration and viability answer different questions and both influence seeding decisions.'},
+ ]},
+ pipette: { title: 'Micropipette transfer workflow', domain: 'd1', steps: [
+  {action:'Choose a pipette whose range includes the target volume and fit a clean tip',why:'Using the correct range avoids damage and inaccurate transfers.'},
+  {action:'Set the target volume within the instrument limits',why:'Do not force the adjustment past the rated range.'},
+  {action:'Press to the first stop before immersing the tip',why:'This prepares the calibrated aspiration stroke.'},
+  {action:'Immerse to the approved depth and release the plunger smoothly',why:'Consistent immersion and a controlled release reduce bubbles and volume errors.'},
+  {action:'Dispense to the first stop, then the second stop, and eject the tip',why:'The second stop clears residual liquid during dispensing; it is not the aspiration starting point.'},
+ ]},
+ centrifuge: { title: 'Centrifuge setup workflow', domain: 'd7', steps: [
+  {action:'Inspect the rotor and confirm tube, adapter, and speed compatibility',why:'Damaged or incompatible components can fail at high speed.'},
+  {action:'Prepare matched tubes and balance opposing positions by mass',why:'Matching volume alone is insufficient if tube contents have different densities.'},
+  {action:'Seat the rotor and close the lid according to the SOP',why:'Correct assembly and interlocks help prevent mechanical hazards.'},
+  {action:'Set the protocol’s RCF, time, and temperature',why:'RCF describes force; RPM produces different forces at different rotor radii.'},
+  {action:'Wait for a complete stop before opening and document the run',why:'Never interrupt a spinning rotor or bypass a lid interlock.'},
+ ]},
+};

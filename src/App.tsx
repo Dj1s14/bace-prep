@@ -1,3 +1,5 @@
+import { PasswordRecovery } from './components/auth/PasswordRecovery';
+import { SaveStatus } from './components/common/SaveStatus';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
@@ -126,6 +128,7 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
         isMobileMenuOpen={sidebarOpen}
       />
 
+      <SaveStatus />
       {/* Faculty Previewing Student Mode Alert Banner */}
       {isFacultyPreviewingStudent && (
         <div className="bg-indigo-950 text-indigo-100 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-indigo-800 shadow-sm z-30">
@@ -192,6 +195,7 @@ const AppRoot: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
+      <PasswordRecovery />
       <AppRoot />
     </AppProvider>
   );

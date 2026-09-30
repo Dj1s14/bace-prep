@@ -1,3 +1,4 @@
+import { requestPasswordRecovery } from '../../lib/passwordRecovery';
 import React, { useState } from 'react';
 import {
   FlaskConical,
@@ -459,6 +460,12 @@ export const LandingPage: React.FC = () => {
                       Your credentials automatically log you directly into your student candidate, faculty educator, or administrator workspace.
                     </p>
 
+                    <div className="text-center mb-3"><button type="button" disabled={loading} className="text-sm text-blue-700 underline" onClick={async () => {
+                      setLoading(true); setErrorMsg(null); setSuccessMsg(null);
+                      try { await requestPasswordRecovery(loginEmail); setSuccessMsg('If that account exists, a recovery email will arrive shortly. Check your spam folder too.'); }
+                      catch (error: any) { setErrorMsg(error.message); }
+                      finally { setLoading(false); }
+                    }}>Forgot password?</button></div>
                     <div className="pt-4 border-t border-slate-800 text-center">
                       <span className="text-xs text-slate-400">Need an account? </span>
                       <button

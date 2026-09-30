@@ -1,3 +1,4 @@
+import { saveWrite } from './saveQueue';
 import { SupabaseClient } from '@supabase/supabase-js';
 import {
   Assignment,
@@ -81,45 +82,34 @@ export async function fetchCloudWorkspace(client: SupabaseClient): Promise<Cloud
 }
 
 export async function cloudCreateClass(client: SupabaseClient, row: SchoolClass) {
-  const { error } = await client.from('school_classes').insert(row);
-  if (error) throw error;
+  await saveWrite(client, { table: 'school_classes', action: 'insert', row: row });
 }
 
 export async function cloudUpdateClass(client: SupabaseClient, id: string, updates: Partial<SchoolClass>) {
-  const { error } = await client.from('school_classes').update(updates).eq('id', id);
-  if (error) throw error;
+  await saveWrite(client, { table: 'school_classes', action: 'update', row: updates, id: id });
 }
 
 export async function cloudDeleteClass(client: SupabaseClient, id: string) {
-  const { error } = await client.from('school_classes').delete().eq('id', id);
-  if (error) throw error;
+  await saveWrite(client, { table: 'school_classes', action: 'delete', id });
 }
 
 export async function cloudCreateAssignment(client: SupabaseClient, row: Assignment) {
-  const { error } = await client.from('assignments').insert(row);
-  if (error) throw error;
+  await saveWrite(client, { table: 'assignments', action: 'insert', row: row });
 }
 
 export async function cloudDeleteAssignment(client: SupabaseClient, id: string) {
-  const { error } = await client.from('assignments').delete().eq('id', id);
-  if (error) throw error;
+  await saveWrite(client, { table: 'assignments', action: 'delete', id });
 }
 
 export async function cloudUpsertAssignmentProgress(client: SupabaseClient, row: AssignmentProgress) {
-  const { error } = await client.from('assignment_progress').upsert(row, {
-    onConflict: 'assignment_id,student_id',
-  });
-  if (error) throw error;
+  await saveWrite(client, { table: 'assignment_progress', action: 'upsert', row, conflict: 'assignment_id,student_id' });
 }
 
 export async function cloudUpsertLessonProgress(
   client: SupabaseClient,
   row: { id: string; student_id: string; lesson_id: string; completed: boolean; completed_at?: string }
 ) {
-  const { error } = await client.from('lesson_progress').upsert(row, {
-    onConflict: 'student_id,lesson_id',
-  });
-  if (error) throw error;
+  await saveWrite(client, { table: 'lesson_progress', action: 'upsert', row, conflict: 'student_id,lesson_id' });
 }
 
 export async function cloudInsertQuizAttempt(client: SupabaseClient, row: QuizAttempt) {
@@ -136,8 +126,7 @@ export async function cloudInsertQuizAttempt(client: SupabaseClient, row: QuizAt
     started_at: row.started_at || null,
     completed_at: row.completed_at || new Date().toISOString(),
   };
-  const { error } = await client.from('quiz_attempts').insert(payload);
-  if (error) throw error;
+  await saveWrite(client, { table: 'quiz_attempts', action: 'insert', row: payload });
 }
 
 export async function cloudInsertActivitySession(client: SupabaseClient, row: StudentActivitySession) {
@@ -155,18 +144,15 @@ export async function cloudInsertActivitySession(client: SupabaseClient, row: St
     accuracy: row.accuracy,
     time_spent_minutes: row.timeSpentMinutes,
   };
-  const { error } = await client.from('activity_sessions').insert(payload);
-  if (error) throw error;
+  await saveWrite(client, { table: 'activity_sessions', action: 'insert', row: payload });
 }
 
 export async function cloudDeleteActivitySession(client: SupabaseClient, id: string) {
-  const { error } = await client.from('activity_sessions').delete().eq('id', id);
-  if (error) throw error;
+  await saveWrite(client, { table: 'activity_sessions', action: 'delete', id });
 }
 
 export async function cloudInsertLessonGrade(client: SupabaseClient, row: LessonGradeRecord) {
-  const { error } = await client.from('lesson_grades').insert(row);
-  if (error) throw error;
+  await saveWrite(client, { table: 'lesson_grades', action: 'insert', row: row });
 }
 
 export async function cloudUpdateLessonGrade(
@@ -174,8 +160,7 @@ export async function cloudUpdateLessonGrade(
   id: string,
   updates: Partial<LessonGradeRecord>
 ) {
-  const { error } = await client.from('lesson_grades').update(updates).eq('id', id);
-  if (error) throw error;
+  await saveWrite(client, { table: 'lesson_grades', action: 'update', row: updates, id: id });
 }
 
 export async function cloudUpdateStudentProfile(
@@ -183,6 +168,9 @@ export async function cloudUpdateStudentProfile(
   studentId: string,
   updates: Partial<Profile>
 ) {
-  const { error } = await client.from('profiles').update(updates).eq('id', studentId);
-  if (error) throw error;
+  if (Object.keys(updates).length === 1 && 'class_id' in updates) {
+    await saveWrite(client, { table: 'manage_student_class', action: 'rpc', row: { student_id_input: studentId, class_id_input: updates.class_id || '' } });
+  } else {
+    await saveWrite(client, { table: 'profiles', action: 'update', row: updates, id: studentId });
+  }
 }
