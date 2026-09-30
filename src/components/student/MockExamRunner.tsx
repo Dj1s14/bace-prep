@@ -186,7 +186,7 @@ export const MockExamRunner: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
       {/* Top Testing Header with Timer & Progress */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 sticky top-20 z-30">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 lg:sticky lg:top-24 lg:z-20">
         <div className="flex items-center space-x-3">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
             {activeExamConfig?.title || 'BACE Mock Exam'}
@@ -290,7 +290,7 @@ export const MockExamRunner: React.FC = () => {
       )}
 
       {/* Main Question Card */}
-      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6 scroll-mt-40">
         {/* Question Header: Domain & Flag */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center space-x-2 text-xs">
