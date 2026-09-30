@@ -164,6 +164,7 @@ export interface Lesson {
   common_mistakes: string[];
   bace_exam_tip: string;
   sections: LessonSection[];
+  references?: Array<{ title: string; url: string }>;
   roadmap_topics?: string[];
   bench_modules?: BenchSkillTopic[];
   lab_activities?: LabActivityScenario[];

@@ -1,3 +1,4 @@
+import { EXPANDED_QUESTIONS } from '../expandedLearning';
 import { Question } from '../../types/database';
 import { LESSON_PIPETTE_QUESTIONS } from './lesson_pipette';
 import { LESSON_DILUTIONS_QUESTIONS } from './lesson_dilutions';
@@ -24,6 +25,7 @@ import { BACE_EXTRA_QUESTIONS } from '../baceCurriculumData';
 import { COVERAGE_EXPANSION_QUESTIONS } from './coverage_expansion';
 
 export const ALL_QUESTIONS: Question[] = [
+  ...EXPANDED_QUESTIONS,
   ...LESSON_PIPETTE_QUESTIONS,
   ...LESSON_DILUTIONS_QUESTIONS,
   ...LESSON_ASEPTIC_QUESTIONS,

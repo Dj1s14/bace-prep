@@ -632,6 +632,16 @@ export const LessonView: React.FC = () => {
             ))}
           </div>
 
+          {lesson.references?.length ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+              <h3 className="font-bold text-slate-900 mb-3">Sources & Further Reading</h3>
+              <ul className="space-y-2">
+                {lesson.references.map(source => <li key={source.url}><a className="text-sm text-blue-700 underline" href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}
+              </ul>
+              <p className="text-xs text-slate-600 mt-3">Original preparation material. For actual laboratory work, follow approved local procedures and required training.</p>
+            </div>
+          ) : null}
+
           {/* Worked Examples */}
           {lesson.worked_examples && lesson.worked_examples.length > 0 && (
             <div className="space-y-4">
