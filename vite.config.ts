@@ -5,8 +5,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    // Host-neutral by default. GitHub Pages sets VITE_BASE_PATH=/bace-prep/
-    // during its build so assets resolve under the repository subpath.
+    // Pages supplies its configured path: / for custom domains,
+    // or /bace-prep/ for repository hosting.
     base: process.env.VITE_BASE_PATH || './',
     plugins: [react(), tailwindcss()],
     resolve: {

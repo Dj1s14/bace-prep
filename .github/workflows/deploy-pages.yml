@@ -54,6 +54,10 @@ jobs:
       - name: Test learning upgrades
         run: npm test
 
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
       - name: Build static site
         id: buildsite
         continue-on-error: true
@@ -61,7 +65,7 @@ jobs:
           set -o pipefail
           npm run build:pages 2>&1 | tee vite-build.log
         env:
-          VITE_BASE_PATH: /bace-prep/
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
           VITE_SUPABASE_URL: https://gfdbcrfqbsowlbnprqqn.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_zo9w_tbm9sgRfSjT52sXXA_WaFcZwF5
 
@@ -75,9 +79,6 @@ jobs:
       - name: Fail if build failed
         if: steps.buildsite.outcome == 'failure'
         run: exit 1
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
