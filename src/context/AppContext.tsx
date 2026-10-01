@@ -1,4 +1,5 @@
 import { normalizeQuestionBank } from '../data/questionNormalization';
+import { facultyDirectory } from '../lib/accountProvisioning';
 import { setSaveOwner } from '../lib/saveQueue';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
@@ -1209,7 +1210,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setStudents(rebuiltStudents);
 
-      if (profile.role === 'teacher') {
+      if (profile.role === 'admin') {
+        setTeachers(facultyDirectory(workspace.profiles));
+      } else if (profile.role === 'teacher') {
         setTeachers([
           {
             id: profile.id,
