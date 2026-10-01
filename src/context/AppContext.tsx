@@ -302,7 +302,7 @@ interface AppContextType {
   createAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
   deleteAssignment: (assignmentId: string) => void;
   markAssignmentCompleted: (assignmentId: string, studentId?: string, score?: number) => void;
-  createClass: (schoolClass: Omit<SchoolClass, 'id' | 'created_at'>) => void;
+  createClass: (schoolClass: Omit<SchoolClass, 'id' | 'created_at'>) => Promise<void>;
 
   // Navigation helpers
   startLesson: (lessonId: string) => void;
@@ -2092,24 +2092,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const createClass = (c: Omit<SchoolClass, 'id' | 'created_at'>) => {
+  const createClass = async (c: Omit<SchoolClass, 'id' | 'created_at'>) => {
     const newClass: SchoolClass = {
       ...c,
-      id: `cls_${Date.now()}`,
-      teacher_id: currentUser?.id || currentTeacher.id,
+      id: `cls_${crypto.randomUUID()}`,
+      teacher_id: currentUser?.role === 'admin' ? c.teacher_id : currentUser?.id || currentTeacher.id,
       created_at: new Date().toISOString(),
     };
-    setClasses((prev) => [...prev, newClass]);
-
     if (environment === 'production') {
       const sb = getSupabase();
-      if (sb) {
-        void cloudCreateClass(sb, newClass).catch(async (err) => {
-          console.error('Unable to create shared class:', err);
-          if (currentUser) await refreshCloudWorkspace(currentUser);
-        });
-      }
+      if (!sb) throw new Error('Supabase is unavailable.');
+      await cloudCreateClass(sb, newClass);
     }
+    setClasses((prev) => [...prev, newClass]);
   };
 
   const recordLessonGrade = (gradeData: Omit<LessonGradeRecord, 'id' | 'submitted_at'>) => {

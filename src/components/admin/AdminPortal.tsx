@@ -33,6 +33,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { StudentOverview, TeacherProfile, SchoolClass } from '../../types/database';
 import { testSupabaseConnection, syncQuestionsToSupabase, syncAssignmentsToSupabase } from '../../lib/supabase';
+import { AssignClassTeacherModal } from '../common/AssignClassTeacherModal';
 import { ProvisionAccountModal } from '../common/ProvisionAccountModal';
 import { CreateStudentModal } from '../common/CreateStudentModal';
 
@@ -73,6 +74,9 @@ export const AdminPortal: React.FC = () => {
   const [teacherToDelete, setTeacherToDelete] = useState<TeacherProfile | null>(null);
   const [classToDelete, setClassToDelete] = useState<SchoolClass | null>(null);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  const [classTeacherAssignment, setClassTeacherAssignment] = useState<{ teacherId?: string; classId?: string } | null>(null);
+  const [creatingClass, setCreatingClass] = useState(false);
 
   // Creation Modals
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
@@ -188,21 +192,25 @@ export const AdminPortal: React.FC = () => {
   };
 
   // Create Class handler
-  const handleCreateClass = (e: React.FormEvent) => {
+  const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClassName.trim()) return;
-
-    createClass({
+    if (!newClassName.trim() || creatingClass) return;
+    if (!newAssignedTeacher) { showNotice('Choose a teacher for this class.'); return; }
+    setCreatingClass(true);
+    try {
+    await createClass({
       name: newClassName.trim(),
-      teacher_id: newAssignedTeacher || (teachers[0]?.id || ''),
+      teacher_id: newAssignedTeacher,
       period: newGradeLevel || 'Period 1',
-      school_year: '2025-2026',
-      join_code: `BACE${Math.floor(100 + Math.random() * 900)}`,
+      school_year: '2026-2027',
+      join_code: `BACE-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`,
     });
 
     showNotice(`Created class "${newClassName.trim()}"`);
     setNewClassName('');
     setIsAddClassOpen(false);
+    } catch (error) { showNotice((error as any)?.message || 'Class could not be saved.'); }
+    finally { setCreatingClass(false); }
   };
 
   // Test Supabase Connection
@@ -813,7 +821,7 @@ export const AdminPortal: React.FC = () => {
                 <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-sm font-bold text-slate-800">No Teachers Found</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                  Provision a verified instructor in Supabase Auth to begin assigning BACE coursework.
+                  Create a teacher account here, then assign classes to give them access to their rosters and coursework.
                 </p>
                 <button
                   onClick={() => setIsAddTeacherOpen(true)}
@@ -865,6 +873,7 @@ export const AdminPortal: React.FC = () => {
                             {t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Active'}
                           </td>
                           <td className="py-3 px-4 text-right">
+                            <button onClick={() => setClassTeacherAssignment({ teacherId: t.id })} className="mr-2 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">Assign Class</button>
                             <button
                               onClick={() => setTeacherToDelete(t)}
                               className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 transition-colors font-semibold text-[11px]"
@@ -940,6 +949,8 @@ export const AdminPortal: React.FC = () => {
                       Instructor: <strong className="text-slate-700">{teacher ? `${teacher.prefix || ''} ${teacher.first_name} ${teacher.last_name}` : 'Unassigned'}</strong>
                     </p>
                   </div>
+
+                  <button onClick={() => setClassTeacherAssignment({ classId: cls.id, teacherId: teacher?.id })} className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Assign / Change Teacher</button>
 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                     <div>
@@ -1355,6 +1366,7 @@ export const AdminPortal: React.FC = () => {
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Assign Teacher</label>
                 <select
+                  required
                   value={newAssignedTeacher}
                   onChange={(e) => setNewAssignedTeacher(e.target.value)}
                   className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white"
@@ -1378,9 +1390,10 @@ export const AdminPortal: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-xs"
+                  disabled={creatingClass}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-xs disabled:opacity-50"
                 >
-                  Create Class Section
+                  {creatingClass ? 'Saving…' : 'Create Class Section'}
                 </button>
               </div>
             </form>
@@ -1462,6 +1475,8 @@ export const AdminPortal: React.FC = () => {
       )}
 
       {isAddTeacherOpen && isProduction && <ProvisionAccountModal accountRole="teacher" onClose={() => setIsAddTeacherOpen(false)} />}
+
+      {classTeacherAssignment && <AssignClassTeacherModal initialTeacherId={classTeacherAssignment.teacherId} initialClassId={classTeacherAssignment.classId} onClose={() => setClassTeacherAssignment(null)} />}
 
       {/* CREATE STUDENT MODAL REUSE */}
       <CreateStudentModal

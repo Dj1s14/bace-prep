@@ -84,11 +84,12 @@ export const TeacherClassesView: React.FC = () => {
   const [period, setPeriod] = useState('Period 1');
   const [examDate, setExamDate] = useState('2026-05-12');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    createClass({
+    try {
+    await createClass({
       name,
       teacher_id: currentTeacher.id,
       period,
@@ -99,6 +100,7 @@ export const TeacherClassesView: React.FC = () => {
     setName('');
     setShowCreateModal(false);
     showNotification('New class section created successfully.');
+    } catch (error) { showNotification((error as any)?.message || 'Class could not be saved.'); }
   };
 
   const handleCopyCode = async (code: string) => {
