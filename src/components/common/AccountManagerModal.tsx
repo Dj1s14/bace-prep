@@ -201,7 +201,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           {isProduction && (
             <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
-              Production accounts are managed by Supabase Auth. Students enroll by creating their own account with a teacher-issued class join code; teacher/admin identities are provisioned by an administrator.
+              Create student accounts from the student roster. Administrators can create teacher accounts from Teacher Management. Students can also self-register with a class join code.
             </div>
           )}
           {/* TAB 1: SWITCH ACCOUNT */}

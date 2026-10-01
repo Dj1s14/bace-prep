@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Check, Mail, School, Hash } from 'lucide-react';
+import { ProvisionAccountModal } from './ProvisionAccountModal';
 import { useApp } from '../../context/AppContext';
 
 interface CreateStudentModalProps {
@@ -34,31 +35,7 @@ export const CreateStudentModal: React.FC<CreateStudentModalProps> = ({
 
   if (!isOpen) return null;
 
-  if (isProduction) {
-    const targetClass = classes.find((cls) => cls.id === initialClassId) || classes[0];
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-        <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Enroll Student Candidate</h2>
-            <p className="text-xs text-slate-500 mt-1">Production enrollment uses secure student self-registration.</p>
-          </div>
-          <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-900">
-            Give the student this class join code:
-            <div className="mt-2 text-lg font-black font-mono tracking-wider">{targetClass?.join_code || 'Create a class first'}</div>
-          </div>
-          <p className="text-xs text-slate-600">
-            The student creates their own Supabase Auth account and enters the code during registration. Once confirmed, they appear automatically in your shared roster.
-          </p>
-          <div className="flex justify-end">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-lg">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (isProduction) return <ProvisionAccountModal accountRole="student" onClose={onClose} onCreated={onCreated} initialClassId={initialClassId} />;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

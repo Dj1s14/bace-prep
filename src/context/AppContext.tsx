@@ -1609,6 +1609,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     department?: string;
     initial_class_name?: string;
   }): TeacherProfile => {
+    if (environment === 'production') throw new Error('Use secure account provisioning to create a teacher login.');
     const id = `roster_teacher_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const teacher: TeacherProfile = {
       id,
@@ -1692,6 +1693,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     target_exam_date?: string;
     readiness?: number;
   }): StudentOverview => {
+    if (environment === 'production') throw new Error('Use secure account provisioning to create a student login.');
     const id = `roster_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const readiness = data.readiness ?? 0;
     const student: StudentOverview = {

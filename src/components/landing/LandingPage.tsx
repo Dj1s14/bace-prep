@@ -487,7 +487,7 @@ export const LandingPage: React.FC = () => {
                   <div className="space-y-4">
                     {/* Role Selector Tabs for Registration */}
                     <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 text-xs text-blue-200">
-                      Self-registration creates <strong>student candidate</strong> accounts only. Faculty and administrator roles are provisioned securely through Supabase administration.
+                      Self-registration creates <strong>student candidate</strong> accounts only. Administrators can create student and teacher accounts in the Admin Portal.
                     </div>
 
                     {/* STUDENT REGISTRATION */}

@@ -33,6 +33,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { StudentOverview, TeacherProfile, SchoolClass } from '../../types/database';
 import { testSupabaseConnection, syncQuestionsToSupabase, syncAssignmentsToSupabase } from '../../lib/supabase';
+import { ProvisionAccountModal } from '../common/ProvisionAccountModal';
 import { CreateStudentModal } from '../common/CreateStudentModal';
 
 export const AdminPortal: React.FC = () => {
@@ -1204,7 +1205,7 @@ export const AdminPortal: React.FC = () => {
       )}
 
       {/* ADD REAL TEACHER MODAL */}
-      {isAddTeacherOpen && (
+      {isAddTeacherOpen && !isProduction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden">
             <div className="bg-teal-700 text-white px-6 py-4 flex items-center justify-between">
@@ -1459,6 +1460,8 @@ export const AdminPortal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {isAddTeacherOpen && isProduction && <ProvisionAccountModal accountRole="teacher" onClose={() => setIsAddTeacherOpen(false)} />}
 
       {/* CREATE STUDENT MODAL REUSE */}
       <CreateStudentModal
