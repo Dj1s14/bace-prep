@@ -5,7 +5,7 @@ import { getSupabase } from '../../lib/supabase';
 import { cloudInsertActivitySession, cloudInsertQuizAttempt } from '../../lib/cloudData';
 export function WorkflowCoach({ stationId }: { stationId: string }) {
   const workflow = practicalWorkflows[stationId];
-  const { currentUser, isProduction, refreshWorkspace } = useApp();
+  const { currentUser, isProduction, isFacultyPreviewingStudent, refreshWorkspace } = useApp();
   const [step,setStep] = useState(0); const [mistakes,setMistakes] = useState(0); const [feedback,setFeedback] = useState(''); const [saved,setSaved] = useState(false);
   const [busy,setBusy] = useState(false);
   const [runId] = useState(()=>crypto.randomUUID());
@@ -16,7 +16,7 @@ export function WorkflowCoach({ stationId }: { stationId: string }) {
     setFeedback(workflow.steps[index].why); setStep(index+1);
   };
   const save = async () => {
-    if (saved || busy || !isProduction || !currentUser) return;
+    if (saved || busy || !isProduction || isFacultyPreviewingStudent || !currentUser) return;
     const client = getSupabase(); if (!client) return;
     const total = workflow.steps.length; const score = Math.max(0,total-mistakes); const id = `workflow_${runId}`;
     setBusy(true);
@@ -30,6 +30,7 @@ export function WorkflowCoach({ stationId }: { stationId: string }) {
     <p className="text-sm font-semibold">{completed?'Workflow complete':`Step ${step+1} of ${workflow.steps.length}`} · {mistakes} correction(s)</p>
     {!completed && <div className="grid gap-2">{workflow.steps.map((s,index)=>({s,index})).filter(item=>item.index>=step).sort((a,b)=>a.s.action.localeCompare(b.s.action)).map(({s,index})=><button key={s.action} className="text-left border rounded-lg p-3 hover:bg-blue-50" onClick={()=>void choose(index)}>{s.action}</button>)}</div>}
     {feedback && <p role="status" className="bg-blue-50 text-blue-900 p-3 rounded-lg text-sm">{feedback}</p>}
-    {completed && isProduction && <button disabled={saved || busy} onClick={()=>void save()} className="bg-blue-600 text-white px-4 py-2 rounded-lg disabled:opacity-50">{saved?'Result saved':busy?'Saving…':'Save workflow result'}</button>}
+    {completed && isFacultyPreviewingStudent && <p className="text-sm text-blue-800">Preview complete — this result is not saved to student records.</p>}
+    {completed && isProduction && !isFacultyPreviewingStudent && <button disabled={saved || busy} onClick={()=>void save()} className="bg-blue-600 text-white px-4 py-2 rounded-lg disabled:opacity-50">{saved?'Result saved':busy?'Saving…':'Save workflow result'}</button>}
   </section>;
 }

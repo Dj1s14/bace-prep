@@ -29,6 +29,7 @@ export const MockExamRunner: React.FC = () => {
     domains,
     currentStudent,
     recordExamSubmission,
+    isFacultyPreviewingStudent,
     setStudentPage,
   } = useApp();
 
@@ -207,7 +208,7 @@ export const MockExamRunner: React.FC = () => {
     };
 
     try {
-      if (isProduction && currentUser) {
+      if (isProduction && currentUser && !isFacultyPreviewingStudent) {
         await recordExamReviews(currentUser.id, examQuestions, selectedChoices);
       }
       await recordExamSubmission(attempt);

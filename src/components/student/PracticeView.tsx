@@ -27,6 +27,7 @@ export const PracticeView: React.FC = () => {
     currentUser,
     currentStudent,
     isProduction,
+    isFacultyPreviewingStudent,
     recordExamSubmission,
     domains,
     topics,
@@ -173,7 +174,7 @@ export const PracticeView: React.FC = () => {
     const currentQ = activeSession.questions[activeSession.currentIndex];
     const correctChoice = currentQ.choices.find((c) => c.is_correct);
     const isCorrect = activeSession.selectedChoices[questionId] === correctChoice?.id;
-    if (isProduction && currentUser) void recordAnswerReview(currentUser.id, currentQ, isCorrect).catch(console.error);
+    if (isProduction && currentUser && !isFacultyPreviewingStudent) void recordAnswerReview(currentUser.id, currentQ, isCorrect).catch(console.error);
 
     setActiveSession((prev) =>
       prev

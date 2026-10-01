@@ -1897,6 +1897,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const recordExamSubmission = async (attempt: QuizAttempt) => {
+    if (isFacultyPreviewingStudent) {
+      setLastExamAttempt(attempt);
+      setStudentPage('exam_results');
+      return;
+    }
+
 
     const targetStudentId = attempt.student_id || currentStudent.profile.id;
     const newSession: StudentActivitySession = {

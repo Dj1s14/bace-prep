@@ -38,3 +38,16 @@ test('expired sessions do not send queued work under a different user',async()=>
   await assert.rejects(saveWrite(client,{table:'lesson_progress',action:'upsert',row:{id:'lp1'}}));
   assert.equal(calls,0);assert.equal(getSaveState().pending,1);
 });
+
+test('faculty preview cleanup removes test assessments while retaining classroom changes',async()=>{
+ const { discardFacultyPreviewWrites } = await import('../src/lib/saveQueue.ts');
+ const owner='faculty-test';
+ storage.set(`bace_pending_writes:${owner}`,JSON.stringify([
+  {table:'activity_sessions',action:'insert',row:{student_id:'preview-student'},owner,key:'preview'},
+  {table:'school_classes',action:'update',row:{name:'Updated class'},owner,key:'class'}
+ ]));
+ setSaveOwner(owner);discardFacultyPreviewWrites();
+ assert.equal(getSaveState().pending,1);
+ const retained=JSON.parse(storage.get(`bace_pending_writes:${owner}`)!);
+ assert.equal(retained[0].table,'school_classes');
+});

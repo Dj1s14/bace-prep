@@ -69,3 +69,13 @@ export function discardOldestFailedWrite() {
   if (state.saving || !state.error || !queue.length) return;
   queue = queue.slice(1); persist(); publish({error:queue.length ? 'Retry the remaining changes.' : '', savedAt:''});
 }
+
+// Explicit cleanup for faculty test results queued by older preview versions.
+// Other writes (classes, grades, assignments, etc.) remain queued.
+export function discardFacultyPreviewWrites() {
+  if (state.saving) return;
+  const previewTables = new Set(['quiz_attempts', 'activity_sessions', 'study_reviews']);
+  queue = queue.filter(item => !previewTables.has(item.table));
+  persist();
+  publish({ error: queue.length ? 'Other unsaved changes remain. Retry saving.' : '', savedAt: '' });
+}
