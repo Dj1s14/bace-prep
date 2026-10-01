@@ -83,14 +83,6 @@ export const MockExamRunner: React.FC = () => {
       }
     }
 
-    // If still less than totalNeeded, safely duplicate with unique IDs
-    let copyIdx = 0;
-    while (selected.length < totalNeeded && questions.length > 0) {
-      const baseQ = questions[copyIdx % questions.length];
-      selected.push({ ...baseQ, id: `${baseQ.id}_exam_${selected.length}` });
-      copyIdx++;
-    }
-
     // Step 3: Trim to totalNeeded and shuffle so domains are interleaved
     return selected.slice(0, totalNeeded).sort(() => 0.5 - Math.random());
   });

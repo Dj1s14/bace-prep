@@ -542,7 +542,7 @@ export const LandingPage: React.FC = () => {
                               required
                               value={sPassword}
                               onChange={(e) => setSPassword(e.target.value)}
-                              placeholder="At least 4 characters"
+                              placeholder="At least 6 characters"
                               className="w-full bg-slate-950/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                             />
                           </div>

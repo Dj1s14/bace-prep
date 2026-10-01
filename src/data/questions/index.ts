@@ -1,3 +1,5 @@
+import { ALL_LESSONS } from '../allLessons';
+import { normalizeQuestionBank } from '../questionNormalization';
 import { EXPANDED_QUESTIONS } from '../expandedLearning';
 import { Question } from '../../types/database';
 import { LESSON_PIPETTE_QUESTIONS } from './lesson_pipette';
@@ -24,7 +26,7 @@ import { DOMAIN_LESSONS_QUESTIONS } from './domain_lessons_questions';
 import { BACE_EXTRA_QUESTIONS } from '../baceCurriculumData';
 import { COVERAGE_EXPANSION_QUESTIONS } from './coverage_expansion';
 
-export const ALL_QUESTIONS: Question[] = [
+const RAW_QUESTIONS: Question[] = [
   ...EXPANDED_QUESTIONS,
   ...LESSON_PIPETTE_QUESTIONS,
   ...LESSON_DILUTIONS_QUESTIONS,
@@ -50,6 +52,8 @@ export const ALL_QUESTIONS: Question[] = [
   ...DOMAIN_8_QUESTIONS,
   ...DOMAIN_8_EXPANSION_QUESTIONS,
 ];
+
+export const ALL_QUESTIONS = normalizeQuestionBank(RAW_QUESTIONS, ALL_LESSONS);
 
 export {
   LESSON_PIPETTE_QUESTIONS,

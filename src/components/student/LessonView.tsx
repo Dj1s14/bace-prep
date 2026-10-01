@@ -175,6 +175,8 @@ const buildFallbackLabActivities = (lesson: Lesson): LabActivityScenario[] => {
 };
 
 export const LessonView: React.FC = () => {
+  const lessonRootRef = React.useRef<HTMLDivElement>(null);
+  const scrollLesson = (top = 0) => lessonRootRef.current?.closest('main')?.scrollTo({ top, left: 0, behavior: 'auto' });
   const {
     lessons,
     selectedLessonId,
@@ -209,21 +211,19 @@ export const LessonView: React.FC = () => {
 
   // Mastery lesson for current lesson
   const defaultMasteryLesson = useMemo(() => {
-    return getMasteryLesson(lesson.id) || ALL_MASTERY_LESSONS[0];
+    return getMasteryLesson(lesson.id);
   }, [lesson.id]);
 
-  const [selectedMasteryLessonId, setSelectedMasteryLessonId] = useState<string>(defaultMasteryLesson.lesson_metadata.lesson_id);
+  const [selectedMasteryLessonId, setSelectedMasteryLessonId] = useState<string>(defaultMasteryLesson?.lesson_metadata.lesson_id || '');
 
   // Sync selectedMasteryLessonId when lesson.id changes
   React.useEffect(() => {
     const matched = getMasteryLesson(lesson.id);
-    if (matched) {
-      setSelectedMasteryLessonId(matched.lesson_metadata.lesson_id);
-    }
+    setSelectedMasteryLessonId(matched?.lesson_metadata.lesson_id || '');
   }, [lesson.id]);
 
   React.useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    scrollLesson();
   }, [lesson.id]);
 
   const activeMasteryLesson = useMemo(() => {
@@ -232,9 +232,11 @@ export const LessonView: React.FC = () => {
 
   // Questions mapped to this lesson (with topic/domain fallback for legacy lessons)
   const allLessonQuestions = useMemo(() => {
-    const matched = questions.filter((q) => q.lesson_id === lesson.id);
+    const available = questions.filter(q => q.active !== false);
+    const matched = available.filter((q) => q.lesson_id === lesson.id);
     if (matched.length > 0) return matched;
-    return questions.filter((q) => q.topic_id === lesson.topic_id || q.domain_id === lesson.domain_id);
+    const topicQuestions = available.filter(q => q.topic_id === lesson.topic_id);
+    return topicQuestions.length ? topicQuestions : available.filter(q => q.domain_id === lesson.domain_id);
   }, [questions, lesson.id, lesson.topic_id, lesson.domain_id]);
 
   // Quiz vs Browse mode
@@ -250,6 +252,9 @@ export const LessonView: React.FC = () => {
 
   React.useEffect(() => {
     setDrillSize(Math.min(5, Math.max(1, allLessonQuestions.length)));
+    setDifficultyFilter('all');
+    setBrowseSearch('');
+    setBrowsePage(1);
     setSelectedAnswers({});
     setSubmittedAnswers({});
     setLessonFinished(false);
@@ -385,7 +390,7 @@ export const LessonView: React.FC = () => {
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
 
   return (
-    <div className="space-y-8 pb-16 max-w-4xl mx-auto">
+    <div ref={lessonRootRef} className="space-y-8 pb-16 max-w-4xl mx-auto">
       {/* Top Breadcrumb & Return button */}
       <div className="flex items-center justify-between">
         <button
@@ -710,7 +715,7 @@ export const LessonView: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('bench_guide');
-                window.scrollTo({ top: 300, behavior: 'smooth' });
+                scrollLesson();
               }}
               className="inline-flex items-center space-x-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2.5 rounded-xl transition-colors shadow-2xs shrink-0"
             >
@@ -739,7 +744,7 @@ export const LessonView: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('activities');
-                window.scrollTo({ top: 300, behavior: 'smooth' });
+                scrollLesson();
               }}
               className="inline-flex items-center space-x-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 rounded-xl transition-colors shadow-2xs shrink-0"
             >
@@ -768,7 +773,7 @@ export const LessonView: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('assessment');
-                window.scrollTo({ top: 300, behavior: 'smooth' });
+                scrollLesson();
               }}
               className="inline-flex items-center space-x-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl transition-colors shadow-2xs shrink-0"
             >
@@ -1135,7 +1140,7 @@ export const LessonView: React.FC = () => {
                   BACE Exam Domain Mastery Modules
                 </div>
                 <div className="text-sm font-bold text-slate-900">
-                  Select Competency Module ({ALL_MASTERY_LESSONS.length} Verified Modules Available)
+                  Select Competency Module ({ALL_MASTERY_LESSONS.length} Modules Available)
                 </div>
               </div>
             </div>
@@ -1146,10 +1151,11 @@ export const LessonView: React.FC = () => {
               </label>
               <select
                 id="mastery-module-select"
-                value={activeMasteryLesson.lesson_metadata.lesson_id}
+                value={activeMasteryLesson?.lesson_metadata.lesson_id || ''}
                 onChange={(e) => setSelectedMasteryLessonId(e.target.value)}
                 className="text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
               >
+                <option value="" disabled>Choose a mastery module</option>
                 {ALL_MASTERY_LESSONS.map((m) => (
                   <option key={m.lesson_metadata.lesson_id} value={m.lesson_metadata.lesson_id}>
                     [{m.lesson_metadata.domain}] {m.lesson_metadata.sublesson}
@@ -1160,11 +1166,11 @@ export const LessonView: React.FC = () => {
           </div>
 
           {/* Render the Interactive Adaptive Engine */}
-          <AdaptiveMasteryModule
+          {activeMasteryLesson ? <AdaptiveMasteryModule
             key={activeMasteryLesson.lesson_metadata.lesson_id}
             masteryLesson={activeMasteryLesson}
             onExit={() => setActiveTab('theory')}
-          />
+          /> : <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-slate-700">This lesson has no dedicated adaptive mastery module yet. Use its lesson assessment, or choose a separate module above.</div>}
         </div>
       )}
 
@@ -1174,7 +1180,7 @@ export const LessonView: React.FC = () => {
           onClick={() => {
             if (prevLesson) {
               setSelectedLessonId(prevLesson.id);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              scrollLesson();
             } else {
               setStudentPage('domain_detail');
             }
@@ -1196,7 +1202,7 @@ export const LessonView: React.FC = () => {
           onClick={() => {
             if (nextLesson) {
               setSelectedLessonId(nextLesson.id);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              scrollLesson();
             } else {
               setStudentPage('learn');
             }

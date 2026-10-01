@@ -1,3 +1,4 @@
+import { normalizeQuestionBank } from '../data/questionNormalization';
 import { setSaveOwner } from '../lib/saveQueue';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
@@ -785,14 +786,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           question_text: cleanQuestionText(q.question_text),
           explanation: cleanQuestionText(q.explanation),
         }));
-        if (parsed.length < INITIAL_QUESTIONS.length) {
-          const existingIds = new Set(parsed.map((q) => q.id));
-          const missingQuestions = INITIAL_QUESTIONS.filter((q) => !existingIds.has(q.id));
-          const merged = [...parsed, ...missingQuestions];
-          localStorage.setItem(STORAGE_KEYS.QUESTIONS, JSON.stringify(merged));
-          return merged;
-        }
-        return parsed;
+        const existingIds = new Set(parsed.map(q => q.id));
+        const missingQuestions = INITIAL_QUESTIONS.filter(q => !existingIds.has(q.id));
+        const merged = normalizeQuestionBank([...parsed, ...missingQuestions], INITIAL_LESSONS);
+        localStorage.setItem(STORAGE_KEYS.QUESTIONS, JSON.stringify(merged));
+        return merged;
       }
       return INITIAL_QUESTIONS;
     } catch {

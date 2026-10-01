@@ -22,3 +22,21 @@ test('new curriculum is reachable through domain, topic, lesson, and assessment 
   }
   assert.equal(new Set(EXPANDED_QUESTIONS.map(q=>q.id)).size,EXPANDED_QUESTIONS.length);
 });
+
+test('active question bank has unique prompts, valid lesson links and consistent difficulty labels', () => {
+ const active=INITIAL_QUESTIONS.filter(q=>q.active!==false);
+ const prompts=active.map(q=>q.question_text.trim().replace(/\s+/g,' ').toLowerCase());
+ assert.equal(new Set(prompts).size,prompts.length);
+ for(const q of INITIAL_QUESTIONS) {
+  if(q.lesson_id) {
+   const lesson=INITIAL_LESSONS.find(l=>l.id===q.lesson_id);
+   assert.ok(lesson,`missing lesson ${q.lesson_id}`);
+   assert.equal(q.domain_id,lesson.domain_id);
+   assert.equal(q.topic_id,lesson.topic_id);
+  }
+  assert.ok(['Easy','Medium','Hard'].includes(q.difficulty));
+ }
+ // Archived repeated IDs remain available to an already-saved exam.
+ assert.equal(INITIAL_QUESTIONS.length,972);
+ for(const d of ['d1','d2','d3','d4','d5','d6','d7','d8']) assert.ok(active.filter(q=>q.domain_id===d).length>=10);
+});
