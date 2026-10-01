@@ -64,7 +64,7 @@ export const LessonStudyToolkit: React.FC<LessonStudyToolkitProps> = ({ lesson }
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-teal-50 rounded-2xl border border-violet-200 p-6 shadow-2xs">
+      <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6 shadow-none">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-800">

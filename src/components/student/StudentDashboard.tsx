@@ -59,9 +59,8 @@ export const StudentDashboard: React.FC = () => {
   })[0];
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="study-dashboard space-y-7 pb-12">
       <JoinClass />
-      <StudyPlan />
       {/* Top Banner: Welcome & Readiness */}
       <section className="bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
@@ -79,7 +78,7 @@ export const StudentDashboard: React.FC = () => {
           </div>
 
           {/* Overall Readiness Card */}
-          <div className="bg-slate-50 rounded-xl p-5 sm:p-6 border border-slate-200/80 min-w-[280px] sm:min-w-[340px]">
+          <div className="bg-slate-50 rounded-xl p-5 sm:p-6 border border-slate-200/80 w-full lg:w-[340px] shrink-0">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Overall BACE Readiness
@@ -116,19 +115,20 @@ export const StudentDashboard: React.FC = () => {
           </div>
         </div>
 
+        <p className="mt-5 text-sm text-slate-600"><span className="font-semibold text-slate-800">Next lesson:</span> {nextLesson.title}</p>
         {/* Quick actions strip */}
         <div className="mt-6 pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">
           <button
-            onClick={() => setStudentPage('learn')}
-            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-xs"
+            onClick={() => startLesson(nextLesson.id)}
+            className="study-button study-button-primary"
           >
             <BookOpen className="w-4 h-4" />
-            <span>Study Domains</span>
+            <span>Continue Studying</span>
           </button>
 
           <button
             onClick={() => startPractice({ mode: 'Quick 10', count: 10 })}
-            className="inline-flex items-center space-x-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="study-button study-button-secondary"
           >
             <Zap className="w-4 h-4 text-blue-600" />
             <span>Quick 10 Practice</span>
@@ -136,7 +136,7 @@ export const StudentDashboard: React.FC = () => {
 
           <button
             onClick={() => setStudentPage('bench_simulator')}
-            className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all shadow-xs cursor-pointer"
+            className="study-button study-button-secondary"
           >
             <FlaskConical className="w-4 h-4" />
             <span>Bench Simulator & Lab Math</span>
@@ -144,13 +144,15 @@ export const StudentDashboard: React.FC = () => {
 
           <button
             onClick={() => setStudentPage('mock_exam')}
-            className="inline-flex items-center space-x-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer"
+            className="study-button study-button-secondary"
           >
             <Clock className="w-4 h-4 text-teal-600" />
             <span>Simulate BACE Exam</span>
           </button>
         </div>
       </section>
+
+      <StudyPlan />
 
       {/* 4 Stat Cards Row (Prompt requirement) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

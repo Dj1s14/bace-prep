@@ -1,3 +1,4 @@
+import { LessonVisual } from './LessonVisual';
 import React, { useState, useMemo } from 'react';
 import {
   ArrowLeft,
@@ -390,7 +391,7 @@ export const LessonView: React.FC = () => {
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
 
   return (
-    <div ref={lessonRootRef} className="space-y-8 pb-16 max-w-4xl mx-auto">
+    <div ref={lessonRootRef} className="lesson-page space-y-7 pb-16 max-w-4xl mx-auto">
       {/* Top Breadcrumb & Return button */}
       <div className="flex items-center justify-between">
         <button
@@ -622,12 +623,22 @@ export const LessonView: React.FC = () => {
             </ul>
           </div>
 
+          <LessonVisual lessonId={lesson.id} />
+
+          <nav aria-label="Lesson contents" className="bg-slate-50 rounded-2xl border border-slate-200 p-5">
+            <h2 className="text-base font-bold text-slate-900 mb-3">In this lesson</h2>
+            <ol className="grid sm:grid-cols-2 gap-2">
+              {lesson.sections.map((section, index) => <li key={index}><button className="text-left text-sm text-blue-700 hover:underline py-2" onClick={() => lessonRootRef.current?.querySelector(`#lesson-section-${index}`)?.scrollIntoView({block:'start',behavior:'auto'})}>{section.title}</button></li>)}
+            </ol>
+          </nav>
+
           {/* Instructional Material Sections */}
           <div className="space-y-6">
             {lesson.sections.map((section, idx) => (
               <div
                 key={idx}
-                className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-3"
+                id={`lesson-section-${idx}`}
+                className="lesson-section bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 space-y-3"
               >
                 <h3 className="text-lg font-bold text-slate-900">{section.title}</h3>
                 <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
