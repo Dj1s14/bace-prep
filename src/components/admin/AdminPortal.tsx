@@ -33,6 +33,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { StudentOverview, TeacherProfile, SchoolClass } from '../../types/database';
 import { testSupabaseConnection, syncQuestionsToSupabase, syncAssignmentsToSupabase } from '../../lib/supabase';
+import { AdminPasswordResetModal } from '../common/AdminPasswordResetModal';
 import { AssignClassTeacherModal } from '../common/AssignClassTeacherModal';
 import { ProvisionAccountModal } from '../common/ProvisionAccountModal';
 import { CreateStudentModal } from '../common/CreateStudentModal';
@@ -66,6 +67,8 @@ export const AdminPortal: React.FC = () => {
   const [studentClassFilter, setStudentClassFilter] = useState('all');
   const [teacherSearch, setTeacherSearch] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  const [passwordResetAccount, setPasswordResetAccount] = useState<{ id: string; email: string; name: string } | null>(null);
 
   // Confirmation Modals
   const [studentToDelete, setStudentToDelete] = useState<StudentOverview | null>(null);
@@ -749,6 +752,7 @@ export const AdminPortal: React.FC = () => {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end space-x-2">
+<button onClick={() => setPasswordResetAccount({ id: s.profile.id, email: s.profile.email, name: `${s.profile.first_name} ${s.profile.last_name}` })} className="px-2.5 py-1.5 rounded-lg text-amber-800 bg-amber-50 border border-amber-200 font-semibold text-[11px]">Reset Password</button>
                               <button
                                 onClick={() => {
                                   setStudentToTransfer(s);
@@ -873,7 +877,8 @@ export const AdminPortal: React.FC = () => {
                             {t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Active'}
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <button onClick={() => setClassTeacherAssignment({ teacherId: t.id })} className="mr-2 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">Assign Class</button>
+                            <button onClick={() => setPasswordResetAccount({ id: t.id, email: t.email, name: `${t.first_name} ${t.last_name}` })} className="mr-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-semibold">Reset Password</button>
+<button onClick={() => setClassTeacherAssignment({ teacherId: t.id })} className="mr-2 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">Assign Class</button>
                             <button
                               onClick={() => setTeacherToDelete(t)}
                               className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 transition-colors font-semibold text-[11px]"
@@ -1478,7 +1483,8 @@ export const AdminPortal: React.FC = () => {
 
       {classTeacherAssignment && <AssignClassTeacherModal initialTeacherId={classTeacherAssignment.teacherId} initialClassId={classTeacherAssignment.classId} onClose={() => setClassTeacherAssignment(null)} />}
 
-      {/* CREATE STUDENT MODAL REUSE */}
+      {passwordResetAccount && <AdminPasswordResetModal account={passwordResetAccount} onClose={() => setPasswordResetAccount(null)} />}
+{/* CREATE STUDENT MODAL REUSE */}
       <CreateStudentModal
         isOpen={isAddStudentOpen}
         onClose={() => setIsAddStudentOpen(false)}
