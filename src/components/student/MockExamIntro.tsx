@@ -15,8 +15,8 @@ import { useApp } from '../../context/AppContext';
 import { BACE_CURRENT_TOTAL_QUESTIONS, BACE_CURRENT_TIME_MINUTES } from '../../data/baceBlueprint';
 
 export const MockExamIntro: React.FC = () => {
-  const { startMockExam, domains, currentUser, currentStudent, environment, setActiveExamConfig, setStudentPage } = useApp();
-  const owner = currentUser?.id || currentStudent.profile.id;
+  const { startMockExam, domains, currentUser, currentStudent, environment, setActiveExamConfig, setStudentPage, isFacultyPreviewingStudent } = useApp();
+  const owner = isFacultyPreviewingStudent ? currentStudent.profile.id : currentUser?.id || currentStudent.profile.id;
   const [saved, setSaved] = useState(() => readExamDraft(owner, environment));
 
   const [selectedType, setSelectedType] = useState<'quick' | 'half' | 'full'>('quick');
@@ -200,3 +200,4 @@ export const MockExamIntro: React.FC = () => {
     </div>
   );
 };
+

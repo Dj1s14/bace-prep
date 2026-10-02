@@ -3,17 +3,17 @@ import { useApp } from '../../context/AppContext';
 import { getSupabase } from '../../lib/supabase';
 import { prioritizeStudy, StudyReview } from '../../lib/studyReviews';
 export function StudyPlan() {
-  const { currentUser, currentStudent, domains, lessons, questions, completedLessonIds, startPractice, startLesson, isProduction } = useApp();
+  const { currentUser, currentStudent, domains, lessons, questions, completedLessonIds, startPractice, startLesson, isProduction, isFacultyPreviewingStudent } = useApp();
   const [reviews, setReviews] = useState<StudyReview[]>([]);
   const [message, setMessage] = useState('');
   useEffect(() => {
     let active = true;
     const client = getSupabase();
-    if (client && currentUser && isProduction) void client.from('study_reviews').select('*').eq('student_id', currentUser.id).then(({ data, error }) => {
+    if (client && currentUser && isProduction && !isFacultyPreviewingStudent) void client.from('study_reviews').select('*').eq('student_id', currentUser.id).then(({ data, error }) => {
       if (!active) return; if (error) setMessage('Review history could not load. Your domain study plan is still available.'); else setReviews(data || []);
     });
     return () => { active = false; };
-  }, [currentUser?.id, isProduction]);
+  }, [currentUser?.id, isProduction, isFacultyPreviewingStudent]);
   const missed = questions.filter(q => reviews.some(r => r.question_id === q.id && !r.last_correct));
   const priorities = prioritizeStudy(domains, currentStudent.domain_mastery, missed).slice(0,3);
   return <section className="bg-white rounded-2xl border p-6 space-y-4">
@@ -31,3 +31,4 @@ export function StudyPlan() {
     })}</div>
   </section>;
 }
+

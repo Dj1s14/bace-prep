@@ -61,6 +61,7 @@ export interface UserAccount {
 }
 
 export interface TeacherProfile {
+  role?: 'teacher' | 'admin';
   id: string;
   prefix?: string; // 'Dr.', 'Mr.', 'Ms.', 'Mrs.', 'Prof.', etc.
   first_name: string;
@@ -407,5 +408,6 @@ export interface UserAccount {
   class_id?: string;
   created_at: string;
 }
+
 
 

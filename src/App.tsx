@@ -135,8 +135,8 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             <span>
-              <strong>Faculty Preview Mode Active:</strong> You are previewing the student candidate portal as{' '}
-              <span className="font-semibold text-white">{currentUser?.first_name} {currentUser?.last_name}</span>. Real candidates cannot access teacher consoles.
+              <strong>Faculty Preview Mode Active:</strong> You are using the generic preview account:{' '}
+              <span className="font-semibold text-white">Demo Student</span>. Preview work does not change student records.
             </span>
           </div>
           <button

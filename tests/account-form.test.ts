@@ -15,14 +15,14 @@ test('account form explains missing information and password requirements before
   assert.match(validateAccountForm(form({ confirm_password: 'different' })), /do not match/);
   assert.equal(validateAccountForm(form()), '');
 });
-test('admin faculty directory includes newly created cloud teachers and excludes other roles', () => {
+test('admin faculty directory includes teachers and admins without creating a duplicate account', () => {
   const profiles: any[] = [
     { id: 'admin', role: 'admin' }, { id: 'student', role: 'student' },
     { id: 'existing', role: 'teacher', first_name: 'Existing', last_name: 'Teacher', email: 'existing@example.edu' },
     { id: 'new', role: 'teacher', first_name: 'New', last_name: 'Teacher', email: 'new@example.edu', department: 'Science' },
   ];
   const directory = facultyDirectory(profiles);
-  assert.deepEqual(directory.map(t => t.id), ['existing', 'new']);
-  assert.equal(directory[1].department, 'Science');
-  assert.equal(directory[0].school_name, 'Biotechnology & Life Sciences Academy');
+  assert.deepEqual(directory.map(t => t.id), ['admin', 'existing', 'new']);
+  assert.equal(directory[2].department, 'Science');
+  assert.equal(directory[1].school_name, 'Biotechnology & Life Sciences Academy');
 });

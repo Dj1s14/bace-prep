@@ -1,3 +1,4 @@
+import { canOpenPortal, createPreviewStudent, PREVIEW_STUDENT_ID, resolveTeacherIdentity } from '../lib/portalAccess';
 import { normalizeQuestionBank } from '../data/questionNormalization';
 import { facultyDirectory } from '../lib/accountProvisioning';
 import { setSaveOwner } from '../lib/saveQueue';
@@ -102,6 +103,8 @@ export interface BenchSimulatorStats {
   gelSizingAccuracy?: number;
   centrifugeBalancesCompleted?: number;
 }
+
+const emptyBenchStats = (): BenchSimulatorStats => ({pipetteDrillsCompleted:0,pipetteAccuracy:100,mathProblemsSolved:0,mathAccuracy:100,auditsCompleted:0,auditsPassed:0,rubricsSignedOff:{}});
 
 export interface GoogleUserInfo {
   id: string;
@@ -668,6 +671,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
 
   const [role, setRoleState] = useState<UserRole>('student');
+  const isFacultyPreviewingStudent = Boolean(currentUser && currentUser.role !== 'student' && role === 'student');
+  const facultyReturnRole = React.useRef<UserRole>('teacher');
+  const [previewStudent, setPreviewStudent] = useState<StudentOverview>(createPreviewStudent);
+  const [previewCompletedLessons, setPreviewCompletedLessons] = useState<string[]>([]);
+  const [previewGrades, setPreviewGrades] = useState<LessonGradeRecord[]>([]);
+  const [previewSessions, setPreviewSessions] = useState<StudentActivitySession[]>([]);
+  const [previewBenchStats, setPreviewBenchStats] = useState<BenchSimulatorStats>(emptyBenchStats);
+
 
   const [studentPage, setStudentPageState] = useState<StudentNavPage>('dashboard');
   const [teacherPage, setTeacherPageState] = useState<TeacherNavPage>('dashboard');
@@ -917,8 +928,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser, environment]);
 
+  // Faculty preview never resolves an enrolled student.
   // Active student resolver
   const currentStudent: StudentOverview = React.useMemo(() => {
+    if (currentUser && currentUser.role !== 'student') return {...previewStudent, lessons_completed:previewCompletedLessons.length};
     if (currentUser && currentUser.role === 'student') {
       const match = students.find(
         (s) => s.profile.id === currentUser.id || s.profile.email.toLowerCase() === currentUser.email.toLowerCase()
@@ -936,26 +949,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (students.length > 0) return students[0];
     return DEFAULT_EMPTY_STUDENT;
-  }, [currentUser, activeStudentId, students, classes]);
+  }, [currentUser, activeStudentId, students, classes, previewStudent, previewCompletedLessons]);
 
   // Active teacher resolver
   const currentTeacher: TeacherProfile = React.useMemo(() => {
-    if (currentUser && currentUser.role === 'teacher') {
-      const match = teachers.find(
-        (t) => t.id === currentUser.id || t.email.toLowerCase() === currentUser.email.toLowerCase()
-      );
-      if (match) return match;
-      return {
-        id: currentUser.id,
-        prefix: currentUser.prefix || 'Dr.',
-        first_name: currentUser.first_name,
-        last_name: currentUser.last_name,
-        email: currentUser.email,
-        school_name: currentUser.school_name || 'Biotechnology & Life Sciences Academy',
-        department: currentUser.department || 'CTE Biomedical Science',
-        created_at: currentUser.created_at || new Date().toISOString(),
-      };
-    }
+    if (currentUser && currentUser.role !== 'student') return resolveTeacherIdentity(currentUser);
     if (activeTeacherId) {
       const found = teachers.find((t) => t.id === activeTeacherId);
       if (found) return found;
@@ -966,9 +964,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Completed lessons for the currently active student only
   const completedLessonIds = React.useMemo(() => {
+    if (isFacultyPreviewingStudent) return previewCompletedLessons;
     const studentId = currentStudent.profile.id;
     return studentCompletedLessonsMap[studentId] || [];
-  }, [currentStudent.profile.id, studentCompletedLessonsMap]);
+  }, [currentStudent.profile.id, studentCompletedLessonsMap, isFacultyPreviewingStudent, previewCompletedLessons]);
 
   const overallReadiness = currentStudent.overall_readiness;
   const [lastExamAttempt, setLastExamAttempt] = useState<QuizAttempt | null>(null);
@@ -1041,12 +1040,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [lessonGrades]);
 
   const setRole = (newRole: UserRole) => {
-    // RBAC Security: Enforce that logged in student candidates cannot switch to teacher or admin consoles
-    if (currentUser?.role === 'student' && (newRole === 'teacher' || newRole === 'admin')) {
-      console.warn('Unauthorized role access blocked: Student accounts cannot enter faculty or admin consoles.');
-      return;
+    if (currentUser && !canOpenPortal(currentUser.role, newRole)) return;
+    if (newRole === 'student' && currentUser?.role !== 'student') {
+      if (role !== 'student') facultyReturnRole.current = role;
+      setPreviewStudent(createPreviewStudent());
+      setPreviewCompletedLessons([]); setPreviewGrades([]); setPreviewSessions([]); setPreviewBenchStats(emptyBenchStats()); setLastExamAttempt(null);
     }
-
     setRoleState(newRole);
     if (newRole === 'student') {
       setStudentPageState('dashboard');
@@ -1057,18 +1056,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const isFacultyPreviewingStudent = Boolean(
-    currentUser && (currentUser.role === 'teacher' || currentUser.role === 'admin') && role === 'student'
-  );
-
   const returnToFacultyConsole = () => {
-    if (currentUser?.role === 'admin') {
-      setRole('admin');
-      setAdminPage('dashboard');
-    } else {
-      setRole('teacher');
-      setTeacherPage('dashboard');
-    }
+    const target = currentUser?.role === 'admin' && facultyReturnRole.current === 'admin' ? 'admin' : 'teacher';
+    setRole(target);
   };
 
   const setStudentPage = (page: StudentNavPage) => {
@@ -1300,7 +1290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSaveOwner(user.id);
     setGoogleUser(googleInfo);
     setCurrentUser(profile);
-    setRole(profile.role);
+    setRoleState(profile.role);
 
     if (profile.role === 'student') {
       setActiveStudentId(profile.id);
@@ -1807,6 +1797,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Domain & Lesson Mastery Actions
   const recordLessonCompletion = (lessonId: string, studentId?: string) => {
+    if (isFacultyPreviewingStudent) {
+      setPreviewCompletedLessons(prev => prev.includes(lessonId) ? prev : [...prev, lessonId]);
+      return;
+    }
     const targetStudentId = studentId || currentStudent.profile.id;
     const existing = studentCompletedLessonsMap[targetStudentId] || [];
 
@@ -1860,6 +1854,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markAssignmentCompleted = (assignmentId: string, studentId?: string, score?: number) => {
+    if (isFacultyPreviewingStudent) return;
     const targetStudentId = studentId || currentStudent.profile.id;
     const progressId = `prog_${assignmentId}_${targetStudentId}`;
     const newRecord: AssignmentProgress = {
@@ -1903,7 +1898,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const recordExamSubmission = async (attempt: QuizAttempt) => {
     if (isFacultyPreviewingStudent) {
-      setLastExamAttempt(attempt);
+      setPreviewStudent(prev => {
+        const total=prev.questions_attempted+attempt.total_questions;
+        return {...prev, questions_attempted:total, accuracy:Math.round((Math.round(prev.questions_attempted*prev.accuracy/100)+attempt.score)/Math.max(1,total)*100), mock_exam_scores:attempt.quiz_type.startsWith('mock')?[...prev.mock_exam_scores,attempt.percentage]:prev.mock_exam_scores};
+      });
+      setPreviewSessions(prev => [...prev,{id:`preview_${attempt.id}`,student_id:PREVIEW_STUDENT_ID,date:new Date().toISOString().slice(0,10),formattedDate:'Preview',label:'Preview assessment',sessionNumber:prev.length+1,type:attempt.quiz_type.startsWith('mock')?'Mock Exam':'Practice Drill',score:attempt.score,totalQuestions:attempt.total_questions,accuracy:attempt.percentage,timeSpentMinutes:Math.round(attempt.time_spent_seconds/60)}]);
+      setLastExamAttempt({...attempt,student_id:PREVIEW_STUDENT_ID});
       setStudentPage('exam_results');
       return;
     }
@@ -1997,6 +1997,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteActivitySession = (sessionId: string) => {
+    if (isFacultyPreviewingStudent) return;
     const sessionToDelete = activitySessions.find((s) => s.id === sessionId);
     if (!sessionToDelete) return;
 
@@ -2040,6 +2041,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDomainMastery = (domainId: string, newScore: number) => {
+    if (isFacultyPreviewingStudent) {
+      setPreviewStudent(prev => ({...prev, domain_mastery:{...prev.domain_mastery,[domainId]:newScore}}));
+      return;
+    }
     const targetStudentId = currentStudent.profile.id;
     setStudents((prev) =>
       prev.map((s) => {
@@ -2096,7 +2101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newClass: SchoolClass = {
       ...c,
       id: `cls_${crypto.randomUUID()}`,
-      teacher_id: currentUser?.role === 'admin' ? c.teacher_id : currentUser?.id || currentTeacher.id,
+      teacher_id: currentUser?.role === 'admin' && role === 'admin' ? c.teacher_id : currentUser?.id || currentTeacher.id,
       created_at: new Date().toISOString(),
     };
     if (environment === 'production') {
@@ -2123,6 +2128,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `lg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       submitted_at: new Date().toISOString(),
     };
+    if (isFacultyPreviewingStudent) {
+      setPreviewGrades(prev => [{...newRecord,student_id:PREVIEW_STUDENT_ID,student_name:'Demo Student'},...prev]);
+      recordLessonCompletion(gradeData.lesson_id);
+      return;
+    }
     setLessonGrades((prev) => [newRecord, ...prev]);
 
     if (environment === 'production') {
@@ -2140,6 +2150,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateLessonGrade = (id: string, updates: Partial<LessonGradeRecord>) => {
+    if (isFacultyPreviewingStudent) return;
     setLessonGrades((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
@@ -2390,7 +2401,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     details?: string,
     rubricId?: string
   ) => {
-    setBenchStats((prev) => {
+    (isFacultyPreviewingStudent ? setPreviewBenchStats : setBenchStats)((prev) => {
       const next: BenchSimulatorStats = {
         ...prev,
         rubricsSignedOff: { ...prev.rubricsSignedOff },
@@ -2424,10 +2435,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         next.centrifugeBalancesCompleted = (prev.centrifugeBalancesCompleted || 0) + 1;
       }
       try {
-        localStorage.setItem('bace_bench_stats', JSON.stringify(next));
+        if (!isFacultyPreviewingStudent) localStorage.setItem('bace_bench_stats', JSON.stringify(next));
       } catch {}
       return next;
     });
+
+    if (isFacultyPreviewingStudent) return;
 
     // Update current student recent activities and domain mastery
     setStudents((prev) =>
@@ -2504,7 +2517,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markBenchLessonComplete = (lessonId: string, completed = true) => {
-    setBenchStats((prev) => {
+    (isFacultyPreviewingStudent ? setPreviewBenchStats : setBenchStats)((prev) => {
       const next: BenchSimulatorStats = {
         ...prev,
         lessonsCompleted: {
@@ -2513,11 +2526,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
       };
       try {
-        localStorage.setItem('bace_bench_stats', JSON.stringify(next));
+        if (!isFacultyPreviewingStudent) localStorage.setItem('bace_bench_stats', JSON.stringify(next));
       } catch {}
       return next;
     });
 
+    if (isFacultyPreviewingStudent) return;
     if (completed) {
       setStudents((prev) =>
         prev.map((s) => {
@@ -2570,6 +2584,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const teacherWorkspace = role === 'teacher' && currentUser?.role === 'admin';
+  const visibleClasses = isFacultyPreviewingStudent ? [] : teacherWorkspace ? classes.filter(c => c.teacher_id === currentUser.id) : classes;
+  const ownClassIds = new Set(visibleClasses.map(c => c.id));
+  const visibleStudents = isFacultyPreviewingStudent ? [previewStudent] : teacherWorkspace ? students.filter(s => ownClassIds.has(s.class_id)) : students;
+  const ownStudentIds = new Set(visibleStudents.map(s => s.profile.id));
+
   return (
     <AppContext.Provider
       value={{
@@ -2615,22 +2635,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         lessons,
         questions,
         achievements,
-        classes,
-        students,
-        teachers,
-        assignments,
-        assignmentProgress,
+        classes: visibleClasses,
+        students: visibleStudents,
+        teachers: isFacultyPreviewingStudent ? [] : teachers,
+        assignments: isFacultyPreviewingStudent ? [] : teacherWorkspace ? assignments.filter(a => ownClassIds.has(a.class_id)) : assignments,
+        assignmentProgress: isFacultyPreviewingStudent ? [] : teacherWorkspace ? assignmentProgress.filter(p => ownStudentIds.has(p.student_id)) : assignmentProgress,
         completedLessonIds,
-        activitySessions,
-        lessonGrades,
+        activitySessions: isFacultyPreviewingStudent ? previewSessions : teacherWorkspace ? activitySessions.filter(s => ownStudentIds.has(s.student_id || '')) : activitySessions,
+        lessonGrades: isFacultyPreviewingStudent ? previewGrades : teacherWorkspace ? lessonGrades.filter(g => ownStudentIds.has(g.student_id)) : lessonGrades,
         currentTeacher,
-        activeTeacherId,
+        activeTeacherId: currentUser?.role !== 'student' ? currentTeacher.id : activeTeacherId,
         setActiveTeacherId,
         createTeacherAccount,
         updateTeacherAccount,
         deleteTeacherAccount,
         currentStudent,
-        activeStudentId,
+        activeStudentId: isFacultyPreviewingStudent ? PREVIEW_STUDENT_ID : activeStudentId,
         setActiveStudentId,
         createStudentAccount,
         updateStudentAccount,
@@ -2677,7 +2697,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         purgeDemoData,
         transferStudentPeriod,
         regenerateClassJoinCode,
-        benchStats,
+        benchStats: isFacultyPreviewingStudent ? previewBenchStats : benchStats,
         recordBenchActivity,
         markBenchLessonComplete,
       }}
@@ -2694,3 +2714,4 @@ export const useApp = () => {
   }
   return context;
 };
+

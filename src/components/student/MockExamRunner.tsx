@@ -33,7 +33,7 @@ export const MockExamRunner: React.FC = () => {
     setStudentPage,
   } = useApp();
 
-  const owner = currentUser?.id || currentStudent.profile.id;
+  const owner = isFacultyPreviewingStudent ? currentStudent.profile.id : currentUser?.id || currentStudent.profile.id;
   const [draft] = useState(() => {
     const saved = readExamDraft(owner, environment);
     return saved?.config.quizType === activeExamConfig?.quizType && saved.questionIds.every(id => questions.some(q => q.id === id)) ? saved : null;
@@ -492,3 +492,4 @@ export const MockExamRunner: React.FC = () => {
     </div>
   );
 };
+

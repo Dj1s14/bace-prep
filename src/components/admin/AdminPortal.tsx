@@ -1,3 +1,4 @@
+import { FacultyRoleModal } from '../common/FacultyRoleModal';
 import React, { useState } from 'react';
 import {
   ShieldCheck,
@@ -57,6 +58,7 @@ export const AdminPortal: React.FC = () => {
     openAuthModal,
     resetAllData,
     isProduction,
+    currentUser,
   } = useApp();
 
   // Local tab override or use adminPage from context
@@ -69,6 +71,8 @@ export const AdminPortal: React.FC = () => {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
   const [passwordResetAccount, setPasswordResetAccount] = useState<{ id: string; email: string; name: string } | null>(null);
+
+  const [facultyRoleAccount, setFacultyRoleAccount] = useState<TeacherProfile | null>(null);
 
   // Confirmation Modals
   const [studentToDelete, setStudentToDelete] = useState<StudentOverview | null>(null);
@@ -552,6 +556,7 @@ export const AdminPortal: React.FC = () => {
                         <div>
                           <div className="text-xs font-bold text-slate-900">
                             {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name}
+{t.role === 'admin' && <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-2 py-1 text-indigo-800">Admin + Teacher</span>}
                           </div>
                           <div className="text-[10px] text-slate-500">{t.email}</div>
                         </div>
@@ -559,7 +564,7 @@ export const AdminPortal: React.FC = () => {
                       <div className="flex items-center space-x-3">
                         <span className="text-[11px] text-slate-500">{t.department}</span>
                         <button
-                          onClick={() => setTeacherToDelete(t)}
+                          disabled={t.role === 'admin'} onClick={() => setTeacherToDelete(t)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                           title="Remove Teacher"
                         >
@@ -859,6 +864,7 @@ export const AdminPortal: React.FC = () => {
                               <div>
                                 <div className="font-bold text-slate-900">
                                   {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name}
+{t.role === 'admin' && <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-2 py-1 text-indigo-800">Admin + Teacher</span>}
                                 </div>
                                 <div className="text-[11px] text-slate-500">{t.email}</div>
                               </div>
@@ -877,10 +883,11 @@ export const AdminPortal: React.FC = () => {
                             {t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Active'}
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <button onClick={() => setPasswordResetAccount({ id: t.id, email: t.email, name: `${t.first_name} ${t.last_name}` })} className="mr-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-semibold">Reset Password</button>
+                            {t.id !== currentUser?.id && <button onClick={() => setFacultyRoleAccount(t)} className="mr-2 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 font-semibold">{t.role === 'admin' ? 'Remove Admin Access' : 'Grant Admin Access'}</button>}
+{t.role !== 'admin' && <button onClick={() => setPasswordResetAccount({ id: t.id, email: t.email, name: `${t.first_name} ${t.last_name}` })} className="mr-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-semibold">Reset Password</button>}
 <button onClick={() => setClassTeacherAssignment({ teacherId: t.id })} className="mr-2 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">Assign Class</button>
                             <button
-                              onClick={() => setTeacherToDelete(t)}
+                              disabled={t.role === 'admin'} onClick={() => setTeacherToDelete(t)}
                               className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 transition-colors font-semibold text-[11px]"
                               title="Remove Teacher from Application"
                             >
@@ -1379,7 +1386,8 @@ export const AdminPortal: React.FC = () => {
                   <option value="">Select Instructor...</option>
                   {teachers.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name} ({t.email})
+                      {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name}
+{t.role === 'admin' && <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-2 py-1 text-indigo-800">Admin + Teacher</span>} ({t.email})
                     </option>
                   ))}
                 </select>
@@ -1483,6 +1491,7 @@ export const AdminPortal: React.FC = () => {
 
       {classTeacherAssignment && <AssignClassTeacherModal initialTeacherId={classTeacherAssignment.teacherId} initialClassId={classTeacherAssignment.classId} onClose={() => setClassTeacherAssignment(null)} />}
 
+      {facultyRoleAccount && <FacultyRoleModal account={facultyRoleAccount} onClose={() => setFacultyRoleAccount(null)} />}
       {passwordResetAccount && <AdminPasswordResetModal account={passwordResetAccount} onClose={() => setPasswordResetAccount(null)} />}
 {/* CREATE STUDENT MODAL REUSE */}
       <CreateStudentModal
@@ -1492,3 +1501,4 @@ export const AdminPortal: React.FC = () => {
     </div>
   );
 };
+

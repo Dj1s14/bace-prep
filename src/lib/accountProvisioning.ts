@@ -11,8 +11,8 @@ export function validateAccountForm(fields: FormData): string {
 import type { Profile } from '../types/database';
 
 export function facultyDirectory(profiles: Profile[]) {
-  return profiles.filter(profile => profile.role === 'teacher').map(profile => ({
-    id: profile.id as string, prefix: profile.prefix as string | undefined,
+  return profiles.filter(profile => profile.role === 'teacher' || profile.role === 'admin').map(profile => ({
+    role: profile.role as 'teacher' | 'admin', id: profile.id as string, prefix: profile.prefix as string | undefined,
     first_name: profile.first_name as string, last_name: profile.last_name as string,
     email: profile.email as string,
     school_name: (profile.school_name as string) || 'Biotechnology & Life Sciences Academy',
@@ -20,3 +20,4 @@ export function facultyDirectory(profiles: Profile[]) {
     created_at: profile.created_at as string | undefined,
   }));
 }
+
