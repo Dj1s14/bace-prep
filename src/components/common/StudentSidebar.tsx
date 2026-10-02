@@ -44,14 +44,14 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose 
     badge?: string;
   }> = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'learn', label: 'Learn', icon: BookOpen, badge: '8 Domains' },
+    { id: 'learn', label: 'Learn', icon: BookOpen },
     { id: 'practice', label: 'Practice', icon: Target },
-    { id: 'bench_simulator', label: 'Bench Simulator', icon: FlaskConical, badge: 'Lab Math' },
-    { id: 'mock_exam', label: 'Mock Exam', icon: Timer, badge: 'BACE Sim' },
+    { id: 'bench_simulator', label: 'Bench Simulator', icon: FlaskConical },
+    { id: 'mock_exam', label: 'Mock Exam', icon: Timer },
     { id: 'progress', label: 'Progress', icon: TrendingUp },
     { id: 'achievements', label: 'Achievements', icon: Award },
     { id: 'profile', label: 'Profile', icon: UserRound },
-    { id: 'about_program', label: 'Wagner CTE & PLTW', icon: School, badge: 'Info' },
+    { id: 'about_program', label: 'Wagner CTE & PLTW', icon: School },
   ];
 
   const handleNav = (page: StudentNavPage) => {
@@ -105,8 +105,9 @@ export const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose 
           return (
             <button
               key={item.id}
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => handleNav(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-medium transition-all ${item.id === 'about_program' ? 'mt-6 border-t border-slate-700' : ''} ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-300 hover:bg-slate-800 hover:text-white'

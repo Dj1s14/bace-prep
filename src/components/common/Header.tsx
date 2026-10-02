@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Teacher Student Access Preview Button */}
-          {isTeacher && !isFacultyPreviewingStudent && (
+          {currentUser?.role !== 'student' && !isStudent && (
             <button
               onClick={() => {
                 setRole('student');
@@ -234,10 +234,11 @@ export const Header: React.FC<HeaderProps> = ({
               title="Preview the candidate student dashboard and simulators"
             >
               <GraduationCap className="w-3.5 h-3.5 text-blue-400" />
-              <span>Student Access</span>
+              <span>Student Preview</span>
             </button>
           )}
 
+          {currentUser?.role === 'admin' && !isStudent && <button onClick={() => setRole(isTeacher ? 'admin' : 'teacher')} className="px-2.5 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold">{isTeacher ? 'Admin Portal' : 'Teacher Workspace'}</button>}
           {/* Wagner CTE & PLTW Info Button */}
           <button
             onClick={() => {
@@ -348,7 +349,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {isStudent ? studentDisplayName : isTeacher ? teacherDisplayName : adminDisplayName}
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">
-                    {isStudent ? currentStudent.profile.email : currentTeacher.email}
+                    {isStudent ? currentStudent.profile.email : isAdmin ? currentUser?.email : currentTeacher.email}
                   </div>
                 </div>
 
@@ -408,6 +409,12 @@ export const Header: React.FC<HeaderProps> = ({
                   )}
                 </div>
 
+                {currentUser && currentUser.role !== 'student' && <div className="p-2 border-b border-slate-800 space-y-1" aria-label="Switch workspace">
+                  <p className="px-3 py-1 text-slate-400">Your workspaces</p>
+                  {currentUser.role === 'admin' && <button onClick={() => setRole('admin')} className="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800">Admin Portal</button>}
+                  <button onClick={() => setRole('teacher')} className="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800">Teacher Workspace</button>
+                  <button onClick={() => setRole('student')} className="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800">Student Preview — Demo Student</button>
+                </div>}
                 {/* Navigation Shortcuts */}
                 <div className="p-2 border-b border-slate-800 space-y-1">
                   {isStudent ? (
@@ -448,7 +455,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <button
                         onClick={() => {
                           setDropdownOpen(false);
-                          setTeacherPage('classes');
+                          setRole('teacher'); setTeacherPage('classes');
                         }}
                         className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors text-left cursor-pointer"
                       >
@@ -458,7 +465,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <button
                         onClick={() => {
                           setDropdownOpen(false);
-                          setTeacherPage('assignments');
+                          setRole('teacher'); setTeacherPage('assignments');
                         }}
                         className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors text-left cursor-pointer"
                       >
@@ -507,3 +514,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

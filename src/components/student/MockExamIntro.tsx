@@ -1,3 +1,4 @@
+import { readExamDraft, examDraftKey, remainingSeconds } from '../../lib/examDraft';
 import React, { useState } from 'react';
 import {
   FileSpreadsheet,
@@ -11,9 +12,12 @@ import {
   Info,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { BACE_CURRENT_TOTAL_QUESTIONS, BACE_CURRENT_TIME_MINUTES } from '../../data/baceBlueprint';
 
 export const MockExamIntro: React.FC = () => {
-  const { startMockExam, domains } = useApp();
+  const { startMockExam, domains, currentUser, currentStudent, environment, setActiveExamConfig, setStudentPage, isFacultyPreviewingStudent } = useApp();
+  const owner = isFacultyPreviewingStudent ? currentStudent.profile.id : currentUser?.id || currentStudent.profile.id;
+  const [saved, setSaved] = useState(() => readExamDraft(owner, environment));
 
   const [selectedType, setSelectedType] = useState<'quick' | 'half' | 'full'>('quick');
 
@@ -39,11 +43,11 @@ export const MockExamIntro: React.FC = () => {
     {
       id: 'full' as const,
       title: 'Full BACE Simulation',
-      questions: 100,
+      questions: BACE_CURRENT_TOTAL_QUESTIONS,
       timeLimit: '4 Hours (240 Min)',
-      minutes: 240,
-      description: 'Official test blueprint replica. 100 questions covering all 8 BACE domains with strict time and review tracking.',
-      badge: 'Official Simulation',
+      minutes: BACE_CURRENT_TIME_MINUTES,
+      description: 'Current-format 124-question simulation covering all 8 BACE domains, weighted to the published category point distribution with strict time and review tracking.',
+      badge: 'Current Format',
     },
   ];
 
@@ -51,6 +55,7 @@ export const MockExamIntro: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-16 max-w-4xl mx-auto">
+      {saved && <section className="bg-blue-50 border rounded-xl p-5 space-y-3"><h2 className="font-bold">Unfinished exam: {saved.config.title}</h2><p className="text-sm">{Object.keys(saved.selectedChoices).length} answers saved. {Math.ceil(remainingSeconds(saved.deadline)/60)} minutes remain. The clock continues while this page is closed.</p><button className="bg-blue-600 text-white px-4 py-2 rounded-lg" onClick={()=>{setActiveExamConfig(saved.config);setStudentPage('mock_exam_runner');}}>Resume exam</button><button className="ml-4 text-rose-700 underline" onClick={()=>{if(window.confirm('Discard your saved answers and start a new exam?')) {localStorage.removeItem(examDraftKey(owner,environment));setSaved(null);}}}>Discard draft</button></section>}
       {/* Intro Hero */}
       <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-4">
         <div className="inline-flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
@@ -183,6 +188,7 @@ export const MockExamIntro: React.FC = () => {
 
         <div className="flex justify-end pt-2">
           <button
+            disabled={Boolean(saved)}
             onClick={() => startMockExam(selectedType)}
             className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-8 py-3 rounded-xl transition-colors shadow-xs group"
           >
@@ -194,3 +200,4 @@ export const MockExamIntro: React.FC = () => {
     </div>
   );
 };
+

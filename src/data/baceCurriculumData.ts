@@ -427,7 +427,7 @@ export const BACE_BENCH_MODULES: Record<string, BenchSkillTopic[]> = {
       core_idea: 'Standard curves relate known standard concentrations to instrument response (absorbance/fluorescence) to interpolate unknown sample concentrations within the linear dynamic range.',
       purpose: 'Accurately convert optical or physical assay signals into chemical concentration units.',
       condition: 'ELISA, Bradford/BCA protein assays, qPCR quantitation, and chromatography peak area analysis.',
-      evidence: 'Linear regression equation (y = mx + b), coefficient of determination R² >= 0.98, and interpolation within tested standard range.',
+      evidence: 'Linear regression equation (y = mx + b), model-fit and control acceptance under the validated procedure, and interpolation within the tested standard range.',
       where_in_lab: 'Spectrophotometer software, plate reader analysis, and QC quantitative release reports.',
       procedure_awareness: [
         'Plot standard concentration on X-axis and instrument signal (Absorbance) on Y-axis.',
@@ -445,7 +445,7 @@ export const BACE_BENCH_MODULES: Record<string, BenchSkillTopic[]> = {
       ],
       connecting_to_decision: [
         'If an unknown sample absorbance is above the top standard, dilute the sample (e.g. 1:5 or 1:10) and re-assay.',
-        'If R² < 0.98, investigate standards and repeat the calibration run.'
+        'If the calibration or required controls fail the specified criteria, investigate and follow the approved repeat-testing procedure.'
       ],
       common_problems: [
         'Arbitrarily deleting a data point because it doesn\'t fit expectations without documenting a technical cause.',

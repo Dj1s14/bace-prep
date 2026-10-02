@@ -44,15 +44,16 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
     classes,
     setTeacherPage,
     setStudentPage,
+    isProduction,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'switch' | 'create_teacher' | 'create_student'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'switch' | 'create_teacher' | 'create_student'>(isProduction ? 'switch' : defaultTab);
 
   // Teacher Form State
   const [tPrefix, setTPrefix] = useState('Dr.');
   const [tFirstName, setTFirstName] = useState('');
   const [tLastName, setTLastName] = useState('');
-  const [tEmail, setTEmail] = useState(teachers.length === 0 ? 'dcjones1441@gmail.com' : '');
+  const [tEmail, setTEmail] = useState('');
   const [tSchool, setTSchool] = useState('Biotechnology & Life Sciences Academy');
   const [tDepartment, setTDepartment] = useState('CTE Biomedical Science');
   const [tInitialClass, setTInitialClass] = useState('Period 1 — Biotechnology I');
@@ -171,7 +172,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             <span>Switch Account ({teachers.length + students.length})</span>
           </button>
 
-          <button
+          {!isProduction && <button
             onClick={() => setActiveTab('create_teacher')}
             className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'create_teacher'
@@ -180,10 +181,10 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             }`}
           >
             <Briefcase className="w-4 h-4 text-teal-600" />
-            <span>+ Create Real Teacher</span>
-          </button>
+            <span>+ Create Demo Teacher</span>
+          </button>}
 
-          <button
+          {!isProduction && <button
             onClick={() => setActiveTab('create_student')}
             className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'create_student'
@@ -192,12 +193,17 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             }`}
           >
             <GraduationCap className="w-4 h-4 text-blue-600" />
-            <span>+ Create Real Student</span>
-          </button>
+            <span>+ Create Demo Student</span>
+          </button>}
         </div>
 
         {/* Modal Scrollable Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {isProduction && (
+            <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
+              Create student accounts from the student roster. Administrators can create teacher accounts from Teacher Management. Students can also self-register with a class join code.
+            </div>
+          )}
           {/* TAB 1: SWITCH ACCOUNT */}
           {activeTab === 'switch' && (
             <div className="space-y-6">
@@ -210,13 +216,15 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                       Real Teacher Accounts ({teachers.length})
                     </h3>
                   </div>
-                  <button
-                    onClick={() => setActiveTab('create_teacher')}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center space-x-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Teacher</span>
-                  </button>
+                  {!isProduction && (
+                    <button
+                      onClick={() => setActiveTab('create_teacher')}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center space-x-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Demo Teacher</span>
+                    </button>
+                  )}
                 </div>
 
                 {teachers.length === 0 ? (
@@ -224,13 +232,15 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                     <p className="text-xs text-teal-900 font-medium">
                       No real teacher accounts created yet.
                     </p>
-                    <button
-                      onClick={() => setActiveTab('create_teacher')}
-                      className="inline-flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Create Teacher Account</span>
-                    </button>
+                    {!isProduction && (
+                      <button
+                        onClick={() => setActiveTab('create_teacher')}
+                        className="inline-flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Create Demo Teacher</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">

@@ -1,3 +1,7 @@
+import { canOpenPortal, createPreviewStudent, PREVIEW_STUDENT_ID, resolveTeacherIdentity } from '../lib/portalAccess';
+import { normalizeQuestionBank } from '../data/questionNormalization';
+import { facultyDirectory } from '../lib/accountProvisioning';
+import { setSaveOwner } from '../lib/saveQueue';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   Domain,
@@ -33,6 +37,22 @@ import {
 } from '../data/initialData';
 import { cleanQuestionText } from '../utils/questionUtils';
 import { getSupabase } from '../lib/supabase';
+import {
+  fetchCloudWorkspace,
+  cloudCreateAssignment,
+  cloudCreateClass,
+  cloudDeleteActivitySession,
+  cloudDeleteAssignment,
+  cloudDeleteClass,
+  cloudUpdateClass,
+  cloudInsertActivitySession,
+  cloudInsertLessonGrade,
+  cloudInsertQuizAttempt,
+  cloudUpdateLessonGrade,
+  cloudUpdateStudentProfile,
+  cloudUpsertAssignmentProgress,
+  cloudUpsertLessonProgress,
+} from '../lib/cloudData';
 
 export type StudentNavPage =
   | 'dashboard'
@@ -84,6 +104,8 @@ export interface BenchSimulatorStats {
   centrifugeBalancesCompleted?: number;
 }
 
+const emptyBenchStats = (): BenchSimulatorStats => ({pipetteDrillsCompleted:0,pipetteAccuracy:100,mathProblemsSolved:0,mathAccuracy:100,auditsCompleted:0,auditsPassed:0,rubricsSignedOff:{}});
+
 export interface GoogleUserInfo {
   id: string;
   email: string;
@@ -132,9 +154,6 @@ interface AppContextType {
   loginUser: (email: string, password?: string, preferredRole?: UserRole) => Promise<{ success: boolean; error?: string }>;
   signOut: () => void;
 
-  // Faculty Access Code Security
-  facultyAccessCode: string;
-  updateFacultyAccessCode: (newCode: string) => void;
   isFacultyPreviewingStudent: boolean;
   returnToFacultyConsole: () => void;
 
@@ -215,70 +234,6 @@ interface AppContextType {
   }) => StudentOverview;
   updateStudentAccount: (id: string, updates: Partial<StudentOverview>) => void;
   deleteStudentAccount: (id: string) => void;
-  createTestStudent: (data: {
-    first_name: string;
-    last_name: string;
-    class_id: string;
-    readiness?: number;
-  }) => StudentOverview;
-
-  // Account Modal
-  isAccountModalOpen: boolean;
-  setIsAccountModalOpen: (open: boolean) => void;
-  accountModalTab: 'switch' | 'create_teacher' | 'create_student';
-  openAccountModal: (tab?: 'switch' | 'create_teacher' | 'create_student') => void;
-
-  overallReadiness: number;
-  lastExamAttempt: QuizAttempt | null;
-  setLastExamAttempt: (attempt: QuizAttempt | null) => void;
-
-  // Mock Exam active configuration
-  activeExamConfig: {
-    title: string;
-    totalQuestions: number;
-    timeLimitMinutes: number;
-    quizType: 'mock_quick' | 'mock_half' | 'mock_full';
-  } | null;
-  setActiveExamConfig: (config: {
-    title: string;
-    totalQuestions: number;
-    timeLimitMinutes: number;
-    quizType: 'mock_quick' | 'mock_half' | 'mock_full';
-  } | null) => void;
-
-  // Practice active configuration
-  activePracticeConfig: {
-    mode: string;
-    domainId?: string;
-    topicId?: string;
-    lessonId?: string;
-    count: number;
-  } | null;
-  setActivePracticeConfig: (config: {
-    mode: string;
-    domainId?: string;
-    topicId?: string;
-    lessonId?: string;
-    count: number;
-  } | null) => void;
-
-  // Actions
-  recordLessonCompletion: (lessonId: string) => void;
-  recordExamSubmission: (attempt: QuizAttempt) => void;
-  deleteActivitySession: (sessionId: string) => void;
-  updateDomainMastery: (domainId: string, newScore: number) => void;
-  addNewQuestion: (question: Omit<Question, 'id' | 'created_at'>) => void;
-  createQuestion: (question: Omit<Question, 'id' | 'created_at'>) => void;
-  addNewAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
-  createAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
-  deleteAssignment: (assignmentId: string) => void;
-  markAssignmentCompleted: (assignmentId: string, studentId?: string, score?: number) => void;
-  createClass: (newClass: Omit<SchoolClass, 'id' | 'created_at'>) => void;
-  recordLessonGrade: (grade: Omit<LessonGradeRecord, 'id' | 'submitted_at'>) => void;
-  updateLessonGrade: (id: string, updates: Partial<LessonGradeRecord>) => void;
-  startLesson: (lessonId: string) => void;
-  openDomain: (domainId: string) => void;
-  startPractice: (config: { mode: string; domainId?: string; topicId?: string; count: number }) => void;
   startMockExam: (type: 'quick' | 'half' | 'full') => void;
   viewStudentProfile: (studentId: string) => void;
   loginDemoStudent: () => void;
@@ -295,7 +250,74 @@ interface AppContextType {
   purgeDemoData: () => void;
   transferStudentPeriod: (studentId: string, newClassId: string) => void;
   regenerateClassJoinCode: (classId: string) => string;
-  resetStudentAccess: (studentId: string) => { tempPassword: string; studentName: string };
+
+  // Account modal
+  isAccountModalOpen: boolean;
+  setIsAccountModalOpen: (open: boolean) => void;
+  accountModalTab: 'switch' | 'create_teacher' | 'create_student';
+  openAccountModal: (tab?: 'switch' | 'create_teacher' | 'create_student') => void;
+
+  // Student learning & assessment actions
+  workspaceError: string;
+  refreshWorkspace: () => Promise<void>;
+  overallReadiness: number;
+  lastExamAttempt: QuizAttempt | null;
+  setLastExamAttempt: React.Dispatch<React.SetStateAction<QuizAttempt | null>>;
+  activeExamConfig: {
+    title: string;
+    totalQuestions: number;
+    timeLimitMinutes: number;
+    quizType: 'mock_quick' | 'mock_half' | 'mock_full';
+  } | null;
+  setActiveExamConfig: React.Dispatch<React.SetStateAction<{
+    title: string;
+    totalQuestions: number;
+    timeLimitMinutes: number;
+    quizType: 'mock_quick' | 'mock_half' | 'mock_full';
+  } | null>>;
+  activePracticeConfig: {
+    mode: string;
+    domainId?: string;
+    topicId?: string;
+    lessonId?: string;
+    questionIds?: string[];
+    count: number;
+  } | null;
+  setActivePracticeConfig: React.Dispatch<React.SetStateAction<{
+    mode: string;
+    domainId?: string;
+    topicId?: string;
+    lessonId?: string;
+    questionIds?: string[];
+    count: number;
+  } | null>>;
+  recordLessonCompletion: (lessonId: string, studentId?: string) => void;
+  recordLessonGrade: (gradeData: Omit<LessonGradeRecord, 'id' | 'submitted_at'>) => void;
+  updateLessonGrade: (id: string, updates: Partial<LessonGradeRecord>) => void;
+  recordExamSubmission: (attempt: QuizAttempt) => Promise<void>;
+  deleteActivitySession: (sessionId: string) => void;
+  updateDomainMastery: (domainId: string, newScore: number) => void;
+
+  // Teacher / authoring actions
+  addNewQuestion: (question: Omit<Question, 'id' | 'created_at'>) => void;
+  createQuestion: (question: Omit<Question, 'id' | 'created_at'>) => void;
+  addNewAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
+  createAssignment: (assignment: Omit<Assignment, 'id' | 'created_at'>) => void;
+  deleteAssignment: (assignmentId: string) => void;
+  markAssignmentCompleted: (assignmentId: string, studentId?: string, score?: number) => void;
+  createClass: (schoolClass: Omit<SchoolClass, 'id' | 'created_at'>) => Promise<void>;
+
+  // Navigation helpers
+  startLesson: (lessonId: string) => void;
+  openDomain: (domainId: string) => void;
+  startPractice: (config: {
+    mode: string;
+    domainId?: string;
+    topicId?: string;
+    lessonId?: string;
+    questionIds?: string[];
+    count: number;
+  }) => void;
 
   // Bench Simulator State & Actions
   benchStats: BenchSimulatorStats;
@@ -364,7 +386,7 @@ const DEFAULT_EMPTY_TEACHER: TeacherProfile = {
   prefix: 'Dr.',
   first_name: 'Faculty',
   last_name: 'Instructor',
-  email: 'dcjones1441@gmail.com',
+  email: 'instructor@biotechprep.edu',
   school_name: 'Biotechnology & Life Sciences Academy',
   department: 'CTE Biomedical Science',
   created_at: new Date().toISOString(),
@@ -467,28 +489,6 @@ export const DEMO_SEED_TEACHER: TeacherProfile = {
   school_name: 'Wagner High School',
   department: 'Wagner CTE Biomedical Science / PLTW Lead',
   created_at: new Date().toISOString(),
-};
-
-export const DEFAULT_FACULTY_ACCESS_CODE = 'WAGNER-FACULTY-2026';
-
-export const getValidFacultyAccessCodes = (): string[] => {
-  const codes = [DEFAULT_FACULTY_ACCESS_CODE, 'BACE-TEACHER-CTE', 'CTE-FACULTY-PASS', 'WAGNER2026'];
-  try {
-    const custom = localStorage.getItem('bace_faculty_access_code');
-    if (custom && custom.trim()) codes.push(custom.trim().toUpperCase());
-  } catch {}
-  return codes;
-};
-
-export const DEFAULT_ADMIN_ACCESS_CODE = 'WAGNER-ADMIN-2026';
-
-export const getValidAdminAccessCodes = (): string[] => {
-  const codes = [DEFAULT_ADMIN_ACCESS_CODE, 'ADMIN2026', 'BACE-ADMIN-MASTER', 'CTE-ADMIN-PASS', 'WAGNER-CTE-ADMIN-2026'];
-  try {
-    const custom = localStorage.getItem('bace_admin_access_code');
-    if (custom && custom.trim()) codes.push(custom.trim().toUpperCase());
-  } catch {}
-  return codes;
 };
 
 const initializeEnvironments = () => {
@@ -671,6 +671,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
 
   const [role, setRoleState] = useState<UserRole>('student');
+  const isFacultyPreviewingStudent = Boolean(currentUser && currentUser.role !== 'student' && role === 'student');
+  const facultyReturnRole = React.useRef<UserRole>('teacher');
+  const [previewStudent, setPreviewStudent] = useState<StudentOverview>(createPreviewStudent);
+  const [previewCompletedLessons, setPreviewCompletedLessons] = useState<string[]>([]);
+  const [previewGrades, setPreviewGrades] = useState<LessonGradeRecord[]>([]);
+  const [previewSessions, setPreviewSessions] = useState<StudentActivitySession[]>([]);
+  const [previewBenchStats, setPreviewBenchStats] = useState<BenchSimulatorStats>(emptyBenchStats);
+
 
   const [studentPage, setStudentPageState] = useState<StudentNavPage>('dashboard');
   const [teacherPage, setTeacherPageState] = useState<TeacherNavPage>('dashboard');
@@ -681,26 +689,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.removeItem(STORAGE_KEYS.USER_CREDENTIALS);
       localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+      localStorage.removeItem(STORAGE_KEYS.STUDENTS);
+      localStorage.removeItem(STORAGE_KEYS.TEACHERS);
+      localStorage.removeItem(STORAGE_KEYS.CLASSES);
+      localStorage.removeItem(STORAGE_KEYS.ASSIGNMENTS);
+      localStorage.removeItem(STORAGE_KEYS.ACTIVITY_SESSIONS);
+      localStorage.removeItem(STORAGE_KEYS.LESSON_GRADES);
     } catch {}
   }, []);
-
-  // Faculty Authorization Key State
-  const [facultyAccessCode, setFacultyAccessCodeState] = useState<string>(() => {
-    try {
-      return localStorage.getItem('bace_faculty_access_code') || DEFAULT_FACULTY_ACCESS_CODE;
-    } catch {
-      return DEFAULT_FACULTY_ACCESS_CODE;
-    }
-  });
-
-  const updateFacultyAccessCode = (newCode: string) => {
-    const trimmed = newCode.trim().toUpperCase();
-    if (!trimmed) return;
-    setFacultyAccessCodeState(trimmed);
-    try {
-      localStorage.setItem('bace_faculty_access_code', trimmed);
-    } catch {}
-  };
 
   // Supabase Google Auth State
   const [googleUser, setGoogleUser] = useState<GoogleUserInfo | null>(() => {
@@ -740,13 +736,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [classes, setClasses] = useState<SchoolClass[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'classes', INITIAL_CLASSES);
+    return env === 'demo' ? loadEnvData(env, 'classes', INITIAL_CLASSES) : [];
   });
 
   // Isolated Teachers State
   const [teachers, setTeachers] = useState<TeacherProfile[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'teachers', env === 'demo' ? [DEMO_SEED_TEACHER] : INITIAL_TEACHERS);
+    return env === 'demo' ? loadEnvData(env, 'teachers', [DEMO_SEED_TEACHER]) : [];
   });
 
   const [activeTeacherId, setActiveTeacherIdState] = useState<string>(() => {
@@ -760,6 +756,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const setActiveTeacherId = (id: string) => {
+    // Live workspaces never impersonate a roster account.
+    if (isProduction && id && id !== currentUser?.id) return;
     setActiveTeacherIdState(id);
     saveEnvData(environment, 'active_teacher_id', id);
     if (environment === 'production') {
@@ -770,7 +768,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Isolated Students State
   const [students, setStudents] = useState<StudentOverview[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'students', env === 'demo' ? [DEMO_SEED_STUDENT] : INITIAL_STUDENTS_ROSTER);
+    return env === 'demo' ? loadEnvData(env, 'students', [DEMO_SEED_STUDENT]) : [];
   });
 
   const [activeStudentId, setActiveStudentIdState] = useState<string>(() => {
@@ -802,14 +800,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           question_text: cleanQuestionText(q.question_text),
           explanation: cleanQuestionText(q.explanation),
         }));
-        if (parsed.length < INITIAL_QUESTIONS.length) {
-          const existingIds = new Set(parsed.map((q) => q.id));
-          const missingQuestions = INITIAL_QUESTIONS.filter((q) => !existingIds.has(q.id));
-          const merged = [...parsed, ...missingQuestions];
-          localStorage.setItem(STORAGE_KEYS.QUESTIONS, JSON.stringify(merged));
-          return merged;
-        }
-        return parsed;
+        const existingIds = new Set(parsed.map(q => q.id));
+        const missingQuestions = INITIAL_QUESTIONS.filter(q => !existingIds.has(q.id));
+        const merged = normalizeQuestionBank([...parsed, ...missingQuestions], INITIAL_LESSONS);
+        localStorage.setItem(STORAGE_KEYS.QUESTIONS, JSON.stringify(merged));
+        return merged;
       }
       return INITIAL_QUESTIONS;
     } catch {
@@ -820,7 +815,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Assignments
   const [assignments, setAssignments] = useState<Assignment[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'assignments', INITIAL_ASSIGNMENTS);
+    return env === 'demo' ? loadEnvData(env, 'assignments', INITIAL_ASSIGNMENTS) : [];
   });
 
   // Assignment Progress per student
@@ -846,62 +841,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Activity Sessions
   const [activitySessions, setActivitySessions] = useState<StudentActivitySession[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'activity_sessions', INITIAL_ACTIVITY_SESSIONS);
+    return env === 'demo' ? loadEnvData(env, 'activity_sessions', INITIAL_ACTIVITY_SESSIONS) : [];
   });
 
   // Lesson Grades
   const [lessonGrades, setLessonGrades] = useState<LessonGradeRecord[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES);
+    return env === 'demo' ? loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES) : [];
   });
 
   // Synchronize isolated storage per active environment
   useEffect(() => {
-    saveEnvData(environment, 'students', students);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'students', students);
   }, [students, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'teachers', teachers);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(teachers));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'teachers', teachers);
   }, [teachers, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'classes', classes);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'classes', classes);
   }, [classes, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'assignments', assignments);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'assignments', assignments);
   }, [assignments, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'activity_sessions', activitySessions);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.ACTIVITY_SESSIONS, JSON.stringify(activitySessions));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'activity_sessions', activitySessions);
   }, [activitySessions, environment]);
 
   useEffect(() => {
-    saveEnvData(environment, 'lesson_grades', lessonGrades);
-    if (environment === 'production') {
-      localStorage.setItem(STORAGE_KEYS.LESSON_GRADES, JSON.stringify(lessonGrades));
-    }
+    if (environment === 'demo') saveEnvData(environment, 'lesson_grades', lessonGrades);
   }, [lessonGrades, environment]);
 
   // Authenticated identity is restored only from the Supabase session.
   // Do not persist an unsigned app-level user object as an authentication session.
+  // Bridge authenticated Supabase identities into the app's progress/roster model
+  // so first-time users do not write progress against a generic fallback profile.
+  useEffect(() => {
+    if (!currentUser || environment !== 'production') return;
+
+    if (currentUser.role === 'student') {
+      setStudents((prev) => {
+        const exists = prev.some(
+          (student) =>
+            student.profile.id === currentUser.id ||
+            student.profile.email.toLowerCase() === currentUser.email.toLowerCase()
+        );
+        if (exists) return prev;
+
+        const student: StudentOverview = {
+          ...DEFAULT_EMPTY_STUDENT,
+          profile: currentUser,
+          class_id: currentUser.class_id || '',
+          last_active: 'Signed in',
+          recent_activities: [],
+        };
+        return [student, ...prev];
+      });
+      setActiveStudentIdState(currentUser.id);
+    }
+
+    if (currentUser.role === 'teacher') {
+      setTeachers((prev) => {
+        const exists = prev.some(
+          (teacher) =>
+            teacher.id === currentUser.id ||
+            teacher.email.toLowerCase() === currentUser.email.toLowerCase()
+        );
+        if (exists) return prev;
+
+        return [
+          {
+            id: currentUser.id,
+            prefix: currentUser.prefix,
+            first_name: currentUser.first_name,
+            last_name: currentUser.last_name,
+            email: currentUser.email,
+            school_name: currentUser.school_name || 'Biotechnology & Life Sciences Academy',
+            department: currentUser.department || 'CTE Biomedical Science',
+            created_at: currentUser.created_at || new Date().toISOString(),
+          },
+          ...prev,
+        ];
+      });
+      setActiveTeacherIdState(currentUser.id);
+    }
+  }, [currentUser, environment]);
+
+  // Faculty preview never resolves an enrolled student.
   // Active student resolver
   const currentStudent: StudentOverview = React.useMemo(() => {
+    if (currentUser && currentUser.role !== 'student') return {...previewStudent, lessons_completed:previewCompletedLessons.length};
     if (currentUser && currentUser.role === 'student') {
       const match = students.find(
         (s) => s.profile.id === currentUser.id || s.profile.email.toLowerCase() === currentUser.email.toLowerCase()
@@ -919,39 +951,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (students.length > 0) return students[0];
     return DEFAULT_EMPTY_STUDENT;
-  }, [currentUser, activeStudentId, students, classes]);
+  }, [currentUser, activeStudentId, students, classes, previewStudent, previewCompletedLessons]);
 
   // Active teacher resolver
   const currentTeacher: TeacherProfile = React.useMemo(() => {
-    if (currentUser && currentUser.role === 'teacher') {
-      const match = teachers.find(
-        (t) => t.id === currentUser.id || t.email.toLowerCase() === currentUser.email.toLowerCase()
-      );
-      if (match) return match;
-      return {
-        id: currentUser.id,
-        prefix: currentUser.prefix || 'Dr.',
-        first_name: currentUser.first_name,
-        last_name: currentUser.last_name,
-        email: currentUser.email,
-        school_name: currentUser.school_name || 'Biotechnology & Life Sciences Academy',
-        department: currentUser.department || 'CTE Biomedical Science',
-        created_at: currentUser.created_at || new Date().toISOString(),
-      };
-    }
+    if (currentUser && currentUser.role !== 'student') return resolveTeacherIdentity(currentUser);
+    if (isProduction) return DEFAULT_EMPTY_TEACHER;
     if (activeTeacherId) {
       const found = teachers.find((t) => t.id === activeTeacherId);
       if (found) return found;
     }
     if (teachers.length > 0) return teachers[0];
     return DEFAULT_EMPTY_TEACHER;
-  }, [currentUser, activeTeacherId, teachers]);
+  }, [currentUser, activeTeacherId, teachers, isProduction]);
 
   // Completed lessons for the currently active student only
   const completedLessonIds = React.useMemo(() => {
+    if (isFacultyPreviewingStudent) return previewCompletedLessons;
     const studentId = currentStudent.profile.id;
     return studentCompletedLessonsMap[studentId] || [];
-  }, [currentStudent.profile.id, studentCompletedLessonsMap]);
+  }, [currentStudent.profile.id, studentCompletedLessonsMap, isFacultyPreviewingStudent, previewCompletedLessons]);
 
   const overallReadiness = currentStudent.overall_readiness;
   const [lastExamAttempt, setLastExamAttempt] = useState<QuizAttempt | null>(null);
@@ -970,6 +989,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     domainId?: string;
     topicId?: string;
     lessonId?: string;
+    questionIds?: string[];
     count: number;
   } | null>(null);
 
@@ -1023,12 +1043,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [lessonGrades]);
 
   const setRole = (newRole: UserRole) => {
-    // RBAC Security: Enforce that logged in student candidates cannot switch to teacher or admin consoles
-    if (currentUser?.role === 'student' && (newRole === 'teacher' || newRole === 'admin')) {
-      console.warn('Unauthorized role access blocked: Student accounts cannot enter faculty or admin consoles.');
-      return;
+    if (currentUser && !canOpenPortal(currentUser.role, newRole)) return;
+    if (newRole === 'teacher' && currentUser && currentUser.role !== 'student') {
+      setActiveTeacherIdState(currentUser.id);
+      setSelectedStudentId(null);
     }
-
+    if (newRole === 'student' && currentUser?.role !== 'student') {
+      if (role !== 'student') facultyReturnRole.current = role;
+      setPreviewStudent(createPreviewStudent());
+      setPreviewCompletedLessons([]); setPreviewGrades([]); setPreviewSessions([]); setPreviewBenchStats(emptyBenchStats()); setLastExamAttempt(null);
+    }
     setRoleState(newRole);
     if (newRole === 'student') {
       setStudentPageState('dashboard');
@@ -1039,18 +1063,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const isFacultyPreviewingStudent = Boolean(
-    currentUser && (currentUser.role === 'teacher' || currentUser.role === 'admin') && role === 'student'
-  );
-
   const returnToFacultyConsole = () => {
-    if (currentUser?.role === 'admin') {
-      setRole('admin');
-      setAdminPage('dashboard');
-    } else {
-      setRole('teacher');
-      setTeacherPage('dashboard');
-    }
+    const target = currentUser?.role === 'admin' && facultyReturnRole.current === 'admin' ? 'admin' : 'teacher';
+    setRole(target);
   };
 
   const setStudentPage = (page: StudentNavPage) => {
@@ -1069,25 +1084,153 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteClass = (id: string) => {
+    const affectedStudentIds = students.filter((student) => student.class_id === id).map((student) => student.profile.id);
     setClasses((prev) => prev.filter((c) => c.id !== id));
-    // Clear class_id for any students enrolled in this deleted class
-    setStudents((prev) => {
-      const updated = prev.map((s) => {
-        if (s.class_id === id) {
-          return {
-            ...s,
-            class_id: '',
-            profile: {
-              ...s.profile,
-              class_id: '',
-            },
-          };
-        }
-        return s;
+    setStudents((prev) =>
+      prev.map((student) =>
+        student.class_id === id
+          ? { ...student, class_id: '', profile: { ...student.profile, class_id: '' } }
+          : student
+      )
+    );
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void (async () => {
+          try {
+            for (const studentId of affectedStudentIds) {
+              await cloudUpdateStudentProfile(sb, studentId, { class_id: '' });
+            }
+            await cloudDeleteClass(sb, id);
+          } catch (err) {
+            console.error('Unable to delete shared class:', err);
+            if (currentUser) await refreshCloudWorkspace(currentUser);
+          }
+        })();
+      }
+    }
+  };
+
+  const [workspaceError, setWorkspaceError] = useState('');
+  const refreshCloudWorkspace = async (profile: Profile) => {
+    if (environment !== 'production') return true;
+    const sb = getSupabase();
+    if (!sb) return false;
+
+    try {
+      const workspace = await fetchCloudWorkspace(sb);
+      setWorkspaceError('');
+
+      setClasses(workspace.classes);
+      setAssignments(workspace.assignments);
+      setLessonGrades(workspace.lessonGrades);
+      setActivitySessions(workspace.activitySessions);
+      setAssignmentProgress(workspace.assignmentProgress);
+
+      const completedMap: Record<string, string[]> = {};
+      workspace.lessonProgress
+        .filter((row) => row.completed)
+        .forEach((row) => {
+          completedMap[row.student_id] = [...(completedMap[row.student_id] || []), row.lesson_id];
+        });
+      setStudentCompletedLessonsMap(completedMap);
+
+      const studentProfiles = workspace.profiles.filter((item) => item.role === 'student');
+      const rebuiltStudents: StudentOverview[] = studentProfiles.map((studentProfile) => {
+        const attempts = workspace.quizAttempts.filter((attempt) => attempt.student_id === studentProfile.id);
+        const sessions = workspace.activitySessions.filter((session) => session.student_id === studentProfile.id);
+        const completedLessons = completedMap[studentProfile.id] || [];
+        const totalQuestions = attempts.reduce((sum, attempt) => sum + (attempt.total_questions || 0), 0);
+        const totalCorrect = attempts.reduce((sum, attempt) => sum + (attempt.score || 0), 0);
+        const accuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+
+        const masteryTotals: Record<string, { weighted: number; weight: number }> = {};
+        attempts.forEach((attempt) => {
+          if (attempt.domain_breakdown) {
+            Object.entries(attempt.domain_breakdown).forEach(([domainId, stats]: [string, any]) => {
+              const q = Number(stats?.total || stats?.total_questions || 1);
+              const pct = Number(stats?.percentage || 0);
+              const current = masteryTotals[domainId] || { weighted: 0, weight: 0 };
+              current.weighted += pct * q;
+              current.weight += q;
+              masteryTotals[domainId] = current;
+            });
+          } else if (attempt.domain_id) {
+            const q = Number(attempt.total_questions || 1);
+            const current = masteryTotals[attempt.domain_id] || { weighted: 0, weight: 0 };
+            current.weighted += Number(attempt.percentage || 0) * q;
+            current.weight += q;
+            masteryTotals[attempt.domain_id] = current;
+          }
+        });
+
+        const domainMastery: Record<string, number> = {};
+        domains.forEach((domain) => {
+          const stat = masteryTotals[domain.id];
+          domainMastery[domain.id] = stat?.weight ? Math.round(stat.weighted / stat.weight) : 0;
+        });
+
+        const readiness = Math.round(
+          domains.reduce(
+            (sum, domain) => sum + (domainMastery[domain.id] || 0) * (domain.exam_weight / 100),
+            0
+          )
+        );
+
+        return {
+          profile: studentProfile,
+          class_id: studentProfile.class_id || '',
+          overall_readiness: readiness,
+          domain_mastery: domainMastery,
+          last_active: sessions.length > 0 ? sessions[sessions.length - 1].formattedDate || 'Recent' : 'Enrolled',
+          status: readiness >= 80 ? 'Ready' : readiness >= 70 ? 'Developing' : readiness >= 60 ? 'Needs Review' : 'At Risk',
+          lessons_completed: completedLessons.length,
+          questions_attempted: totalQuestions,
+          accuracy,
+          mock_exam_scores: attempts
+            .filter((attempt) => String(attempt.quiz_type).startsWith('mock'))
+            .map((attempt) => Number(attempt.percentage || 0)),
+          weakest_topics: [],
+          strongest_topics: [],
+          recent_activities: sessions
+            .slice(-5)
+            .reverse()
+            .map((session) => ({
+              type: session.type === 'Mock Exam' ? 'Mock Exam' : 'Practice Set',
+              description: session.label || session.type,
+              date: session.formattedDate || 'Recent',
+              score: `${session.score}/${session.totalQuestions} (${session.accuracy}%)`,
+            })),
+        };
       });
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
-      return updated;
-    });
+
+      setStudents(rebuiltStudents);
+
+      if (profile.role === 'admin') {
+        setTeachers(facultyDirectory(workspace.profiles));
+      } else if (profile.role === 'teacher') {
+        setTeachers([
+          {
+            id: profile.id,
+            prefix: profile.prefix,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            email: profile.email,
+            school_name: profile.school_name || 'Biotechnology & Life Sciences Academy',
+            department: profile.department || 'CTE Biomedical Science',
+            created_at: profile.created_at || new Date().toISOString(),
+          },
+        ]);
+      } else if (profile.role === 'student') {
+        setTeachers([]);
+      }
+      return true;
+    } catch (err) {
+      setWorkspaceError('Shared classroom data could not load. Refresh when connected.');
+      console.error('Unable to load shared Supabase workspace:', err);
+      return false;
+    }
   };
 
   // Supabase Auth is the single source of truth for production identity.
@@ -1109,7 +1252,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role: 'student',
       school_name: metadata.school_name || 'Biotechnology & Life Sciences Academy',
       target_exam_date: metadata.target_exam_date,
-      class_id: metadata.class_id,
+      class_id: undefined,
       created_at: user.created_at || new Date().toISOString(),
     };
 
@@ -1134,9 +1277,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         // Never self-provision teacher/admin from browser input or OAuth metadata.
         const studentProfile = { ...fallbackProfile, role: 'student' as UserRole };
-        const { error: insertError } = await sb.from('profiles').insert(studentProfile);
-        if (insertError) console.warn('Unable to create Supabase profile:', insertError.message);
-        profile = studentProfile;
+        const { data: created, error: insertError } = await sb.from('profiles').insert(studentProfile).select('*').single();
+        if (insertError) throw insertError;
+        profile = created;
       }
     } catch (err) {
       console.warn('Profile hydration failed; using authenticated student fallback.', err);
@@ -1151,19 +1294,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role: profile.role,
     };
 
+    setSaveOwner(user.id);
     setGoogleUser(googleInfo);
     setCurrentUser(profile);
-    setRole(profile.role);
+    setRoleState(profile.role);
 
     if (profile.role === 'student') {
       setActiveStudentId(profile.id);
       setStudentPage('dashboard');
     } else if (profile.role === 'teacher') {
-      setActiveTeacherId(profile.id);
+      setActiveTeacherIdState(profile.id);
       setTeacherPage('dashboard');
     } else {
       setAdminPage('dashboard');
     }
+
+    await refreshCloudWorkspace(profile);
   };
 
   useEffect(() => {
@@ -1177,6 +1323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (session?.user) {
         void hydrateSupabaseUser(session.user);
       } else {
+        setSaveOwner('');
         setCurrentUser(null);
         setGoogleUser(null);
       }
@@ -1187,6 +1334,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (session?.user) {
         void hydrateSupabaseUser(session.user);
       } else {
+        setSaveOwner('');
         setCurrentUser(null);
         setGoogleUser(null);
       }
@@ -1209,7 +1357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { error } = await sb.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).toString(),
         },
       });
 
@@ -1273,20 +1421,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const cleanEmail = data.email.trim().toLowerCase();
-    const matchedClass = data.class_id
-      ? classes.find((c) => c.id === data.class_id)
-      : classes.find((c) => c.join_code?.toUpperCase() === data.class_join_code?.trim().toUpperCase());
 
     const { data: authData, error } = await sb.auth.signUp({
       email: cleanEmail,
       password: data.password,
       options: {
+        emailRedirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).toString(),
         data: {
           first_name: data.first_name.trim(),
           last_name: data.last_name.trim(),
           role: 'student',
-          class_id: matchedClass?.id || data.class_id || undefined,
-          school_name: data.school_name || matchedClass?.name || undefined,
+          class_join_code: data.class_join_code?.trim().toUpperCase() || undefined,
+          school_name: data.school_name || undefined,
           target_exam_date: data.target_exam_date || undefined,
         },
       },
@@ -1463,6 +1609,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     department?: string;
     initial_class_name?: string;
   }): TeacherProfile => {
+    if (environment === 'production') throw new Error('Use secure account provisioning to create a teacher login.');
     const id = `roster_teacher_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const teacher: TeacherProfile = {
       id,
@@ -1503,8 +1650,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateTeacherAccount = (id: string, updates: Partial<TeacherProfile>) => {
     setTeachers((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+      prev.map((teacher) => (teacher.id === id ? { ...teacher, ...updates } : teacher))
     );
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        const profileUpdates: Partial<Profile> = {
+          prefix: updates.prefix,
+          first_name: updates.first_name,
+          last_name: updates.last_name,
+          email: updates.email,
+          school_name: updates.school_name,
+          department: updates.department,
+        };
+        Object.keys(profileUpdates).forEach((key) => {
+          if ((profileUpdates as any)[key] === undefined) delete (profileUpdates as any)[key];
+        });
+        void cloudUpdateStudentProfile(sb, id, profileUpdates).catch(async (err) => {
+          console.error('Unable to update shared teacher profile:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const deleteTeacherAccount = (id: string) => {
@@ -1525,6 +1693,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     target_exam_date?: string;
     readiness?: number;
   }): StudentOverview => {
+    if (environment === 'production') throw new Error('Use secure account provisioning to create a student login.');
     const id = `roster_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const readiness = data.readiness ?? 0;
     const student: StudentOverview = {
@@ -1571,49 +1740,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteStudentAccount = (id: string) => {
-    setStudents((prev) => {
-      const filtered = prev.filter((s) => s.profile.id !== id);
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(filtered));
-      return filtered;
-    });
-    if (activeStudentId === id) {
-      setActiveStudentId('');
+    if (environment === 'production') {
+      setStudents((prev) => prev.filter((student) => student.profile.id !== id));
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateStudentProfile(sb, id, { class_id: '' }).catch(async (err) => {
+          console.error('Unable to unenroll shared student:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+      return;
     }
-    setActivitySessions((prev) => {
-      const filtered = prev.filter((a) => a.student_id !== id);
-      localStorage.setItem(STORAGE_KEYS.ACTIVITY_SESSIONS, JSON.stringify(filtered));
-      return filtered;
-    });
-    setLessonGrades((prev) => {
-      const filtered = prev.filter((g) => g.student_id !== id);
-      localStorage.setItem(STORAGE_KEYS.LESSON_GRADES, JSON.stringify(filtered));
-      return filtered;
-    });
+
+    setStudents((prev) => prev.filter((student) => student.profile.id !== id));
+    setActivitySessions((prev) => prev.filter((activity) => activity.student_id !== id));
+    setLessonGrades((prev) => prev.filter((grade) => grade.student_id !== id));
   };
 
   const transferStudentPeriod = (studentId: string, newClassId: string) => {
-    setStudents((prev) => {
-      const updated = prev.map((s) => {
-        if (s.profile.id === studentId) {
-          return {
-            ...s,
-            class_id: newClassId,
-            profile: {
-              ...s.profile,
-              class_id: newClassId,
-            },
-          };
-        }
-        return s;
-      });
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
-      return updated;
-    });
+    setStudents((prev) =>
+      prev.map((student) =>
+        student.profile.id === studentId
+          ? { ...student, class_id: newClassId, profile: { ...student.profile, class_id: newClassId } }
+          : student
+      )
+    );
 
     if (currentUser?.id === studentId) {
-      const updatedUser = { ...currentUser, class_id: newClassId };
-      setCurrentUser(updatedUser);
-      localStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(updatedUser));
+      setCurrentUser({ ...currentUser, class_id: newClassId });
+    }
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateStudentProfile(sb, studentId, { class_id: newClassId }).catch(async (err) => {
+          console.error('Unable to transfer shared student:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
     }
   };
 
@@ -1621,51 +1785,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cls = classes.find((c) => c.id === classId);
     const periodNum = cls?.period ? cls.period.replace(/\D/g, '') : '1';
     const randDigits = Math.floor(10 + Math.random() * 90);
-    const newCode = `WAGNER${periodNum || '1'}0${randDigits}`;
+    const newCode = `W-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
-    setClasses((prev) => {
-      const updated = prev.map((c) => (c.id === classId ? { ...c, join_code: newCode } : c));
-      localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(updated));
-      return updated;
-    });
+    setClasses((prev) => prev.map((c) => (c.id === classId ? { ...c, join_code: newCode } : c)));
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateClass(sb, classId, { join_code: newCode }).catch(async (err) => {
+          console.error('Unable to update class join code:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
 
     return newCode;
   };
 
-  const resetStudentAccess = (studentId: string): { tempPassword: string; studentName: string } => {
-    const stu = students.find((s) => s.profile.id === studentId);
-    const randDigits = Math.floor(100 + Math.random() * 900);
-    const tempPassword = `WagnerPrep2026!${randDigits}`;
-
-    setStudents((prev) => {
-      const updated = prev.map((s) => {
-        if (s.profile.id === studentId) {
-          return {
-            ...s,
-            last_active: 'Password Reset Issued',
-          };
-        }
-        return s;
-      });
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
-      return updated;
-    });
-
-    return {
-      tempPassword,
-      studentName: stu ? `${stu.profile.first_name} ${stu.profile.last_name}` : 'Student Candidate',
-    };
-  };
-
   // Domain & Lesson Mastery Actions
-  const recordLessonCompletion = (lessonId: string) => {
-    const targetStudentId = currentStudent.profile.id;
+  const recordLessonCompletion = (lessonId: string, studentId?: string) => {
+    if (isFacultyPreviewingStudent) {
+      setPreviewCompletedLessons(prev => prev.includes(lessonId) ? prev : [...prev, lessonId]);
+      return;
+    }
+    const targetStudentId = studentId || currentStudent.profile.id;
     const existing = studentCompletedLessonsMap[targetStudentId] || [];
 
     if (!existing.includes(lessonId)) {
       const updated = [...existing, lessonId];
       const newMap = { ...studentCompletedLessonsMap, [targetStudentId]: updated };
       setStudentCompletedLessonsMap(newMap);
+
+      if (environment === 'production') {
+        const sb = getSupabase();
+        if (sb) {
+          void cloudUpsertLessonProgress(sb, {
+            id: `lp_${targetStudentId}_${lessonId}`,
+            student_id: targetStudentId,
+            lesson_id: lessonId,
+            completed: true,
+            completed_at: new Date().toISOString(),
+          }).catch((err) => console.error('Unable to save lesson progress:', err));
+        }
+      }
 
       // Auto-complete any active assignment for this lesson
       const matchingAssignment = assignments.find(
@@ -1699,6 +1861,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markAssignmentCompleted = (assignmentId: string, studentId?: string, score?: number) => {
+    if (isFacultyPreviewingStudent) return;
     const targetStudentId = studentId || currentStudent.profile.id;
     const progressId = `prog_${assignmentId}_${targetStudentId}`;
     const newRecord: AssignmentProgress = {
@@ -1706,7 +1869,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       assignment_id: assignmentId,
       student_id: targetStudentId,
       status: 'Completed',
-      score: score || 100,
+      score: score ?? 100,
       completed_at: new Date().toISOString(),
     };
 
@@ -1714,18 +1877,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const filtered = prev.filter((p) => !(p.assignment_id === assignmentId && p.student_id === targetStudentId));
       return [newRecord, ...filtered];
     });
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpsertAssignmentProgress(sb, newRecord).catch((err) =>
+          console.error('Unable to save assignment progress:', err)
+        );
+      }
+    }
   };
 
   const deleteAssignment = (assignmentId: string) => {
     setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
     setAssignmentProgress((prev) => prev.filter((p) => p.assignment_id !== assignmentId));
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudDeleteAssignment(sb, assignmentId).catch(async (err) => {
+          console.error('Unable to delete shared assignment:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
-  const recordExamSubmission = (attempt: QuizAttempt) => {
-    setLastExamAttempt(attempt);
+  const recordExamSubmission = async (attempt: QuizAttempt) => {
+    if (isFacultyPreviewingStudent) {
+      setPreviewStudent(prev => {
+        const total=prev.questions_attempted+attempt.total_questions;
+        return {...prev, questions_attempted:total, accuracy:Math.round((Math.round(prev.questions_attempted*prev.accuracy/100)+attempt.score)/Math.max(1,total)*100), mock_exam_scores:attempt.quiz_type.startsWith('mock')?[...prev.mock_exam_scores,attempt.percentage]:prev.mock_exam_scores};
+      });
+      setPreviewSessions(prev => [...prev,{id:`preview_${attempt.id}`,student_id:PREVIEW_STUDENT_ID,date:new Date().toISOString().slice(0,10),formattedDate:'Preview',label:'Preview assessment',sessionNumber:prev.length+1,type:attempt.quiz_type.startsWith('mock')?'Mock Exam':'Practice Drill',score:attempt.score,totalQuestions:attempt.total_questions,accuracy:attempt.percentage,timeSpentMinutes:Math.round(attempt.time_spent_seconds/60)}]);
+      setLastExamAttempt({...attempt,student_id:PREVIEW_STUDENT_ID});
+      setStudentPage('exam_results');
+      return;
+    }
 
+
+    const targetStudentId = attempt.student_id || currentStudent.profile.id;
     const newSession: StudentActivitySession = {
-      id: `sess_${Date.now()}`,
+      student_id: targetStudentId,
+      id: `sess_${attempt.id}`,
       date: new Date().toISOString().split('T')[0],
       formattedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       sessionNumber: activitySessions.length + 1,
@@ -1741,9 +1935,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timeSpentMinutes: Math.max(1, Math.round(attempt.time_spent_seconds / 60)),
     };
 
-    setActivitySessions((prev) => [...prev, newSession]);
-
-    const targetStudentId = attempt.student_id || currentStudent.profile.id;
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (!sb) throw new Error('Sign in before saving this assessment.');
+      await Promise.all([cloudInsertQuizAttempt(sb, { ...attempt, student_id: targetStudentId }), cloudInsertActivitySession(sb, newSession)]);
+    }
+    setLastExamAttempt(attempt);
+    setActivitySessions((prev) => [...prev.filter(item => item.id !== newSession.id), newSession]);
 
     setStudents((prev) =>
       prev.map((s) => {
@@ -1806,10 +2004,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteActivitySession = (sessionId: string) => {
+    if (isFacultyPreviewingStudent) return;
     const sessionToDelete = activitySessions.find((s) => s.id === sessionId);
     if (!sessionToDelete) return;
 
     setActivitySessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudDeleteActivitySession(sb, sessionId).catch((err) =>
+          console.error('Unable to delete shared activity session:', err)
+        );
+      }
+    }
 
     setStudents((prev) =>
       prev.map((s) => {
@@ -1840,6 +2048,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDomainMastery = (domainId: string, newScore: number) => {
+    if (isFacultyPreviewingStudent) {
+      setPreviewStudent(prev => ({...prev, domain_mastery:{...prev.domain_mastery,[domainId]:newScore}}));
+      return;
+    }
     const targetStudentId = currentStudent.profile.id;
     setStudents((prev) =>
       prev.map((s) => {
@@ -1880,15 +2092,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       created_at: new Date().toISOString(),
     };
     setAssignments((prev) => [newA, ...prev]);
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudCreateAssignment(sb, newA).catch(async (err) => {
+          console.error('Unable to create shared assignment:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
-  const createClass = (c: Omit<SchoolClass, 'id' | 'created_at'>) => {
+  const createClass = async (c: Omit<SchoolClass, 'id' | 'created_at'>) => {
     const newClass: SchoolClass = {
       ...c,
-      id: `cls_${Date.now()}`,
-      teacher_id: c.teacher_id || currentTeacher.id,
+      id: `cls_${crypto.randomUUID()}`,
+      teacher_id: currentUser?.role === 'admin' && role === 'admin' ? c.teacher_id : currentUser?.id || currentTeacher.id,
       created_at: new Date().toISOString(),
     };
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (!sb) throw new Error('Supabase is unavailable.');
+      await cloudCreateClass(sb, newClass);
+    }
     setClasses((prev) => [...prev, newClass]);
   };
 
@@ -1908,16 +2135,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `lg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       submitted_at: new Date().toISOString(),
     };
-    setLessonGrades((prev) => [newRecord, ...prev]);
-    if (gradeData.lesson_id) {
+    if (isFacultyPreviewingStudent) {
+      setPreviewGrades(prev => [{...newRecord,student_id:PREVIEW_STUDENT_ID,student_name:'Demo Student'},...prev]);
       recordLessonCompletion(gradeData.lesson_id);
+      return;
+    }
+    setLessonGrades((prev) => [newRecord, ...prev]);
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudInsertLessonGrade(sb, newRecord).catch((err) =>
+          console.error('Unable to save shared lesson grade:', err)
+        );
+      }
+    }
+
+    if (gradeData.lesson_id) {
+      recordLessonCompletion(gradeData.lesson_id, gradeData.student_id);
     }
   };
 
   const updateLessonGrade = (id: string, updates: Partial<LessonGradeRecord>) => {
+    if (isFacultyPreviewingStudent) return;
     setLessonGrades((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
+
+    if (environment === 'production') {
+      const sb = getSupabase();
+      if (sb) {
+        void cloudUpdateLessonGrade(sb, id, updates).catch(async (err) => {
+          console.error('Unable to update shared lesson grade:', err);
+          if (currentUser) await refreshCloudWorkspace(currentUser);
+        });
+      }
+    }
   };
 
   const startLesson = (lessonId: string) => {
@@ -1935,6 +2188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     domainId?: string;
     topicId?: string;
     lessonId?: string;
+    questionIds?: string[];
     count: number;
   }) => {
     setActivePracticeConfig(config);
@@ -1958,8 +2212,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } else {
       setActiveExamConfig({
-        title: 'Full BACE Simulation — 100 Questions',
-        totalQuestions: 100,
+        title: 'Full BACE Simulation — 124 Questions',
+        totalQuestions: 124,
         timeLimitMinutes: 240,
         quizType: 'mock_full',
       });
@@ -2018,23 +2272,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActivitySessions(nextActivities);
     setLessonGrades(nextGrades);
 
-    // User switch
+    if (newEnv === 'production') {
+      setCurrentUser(null);
+      const sb = getSupabase();
+      if (sb) void sb.auth.getSession().then(({ data }) => { if (data.session?.user) void hydrateSupabaseUser(data.session.user); });
+      return;
+    }
+
+    // Demo user switch
     const nextUserRaw = localStorage.getItem(getEnvStorageKey(newEnv, 'auth_user'));
     if (nextUserRaw) {
       try {
         const nextUser: Profile = JSON.parse(nextUserRaw);
-        if (
-          newEnv === 'production' &&
-          (nextUser.id === 'stu_demo_wagner_jordan' ||
-            nextUser.id === 'tch_demo_wagner_martinez' ||
-            nextUser.email.toLowerCase() === 'jordan.rivera@wagner-cte.org' ||
-            nextUser.email.toLowerCase() === 'martinez.cte@wagner-cte.org')
-        ) {
-          signOut();
-        } else {
-          setCurrentUser(nextUser);
-          setRole(nextUser.role);
-        }
+        setCurrentUser(nextUser);
+        setRole(nextUser.role);
       } catch {
         signOut();
       }
@@ -2157,7 +2408,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     details?: string,
     rubricId?: string
   ) => {
-    setBenchStats((prev) => {
+    (isFacultyPreviewingStudent ? setPreviewBenchStats : setBenchStats)((prev) => {
       const next: BenchSimulatorStats = {
         ...prev,
         rubricsSignedOff: { ...prev.rubricsSignedOff },
@@ -2191,10 +2442,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         next.centrifugeBalancesCompleted = (prev.centrifugeBalancesCompleted || 0) + 1;
       }
       try {
-        localStorage.setItem('bace_bench_stats', JSON.stringify(next));
+        if (!isFacultyPreviewingStudent) localStorage.setItem('bace_bench_stats', JSON.stringify(next));
       } catch {}
       return next;
     });
+
+    if (isFacultyPreviewingStudent) return;
 
     // Update current student recent activities and domain mastery
     setStudents((prev) =>
@@ -2271,7 +2524,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markBenchLessonComplete = (lessonId: string, completed = true) => {
-    setBenchStats((prev) => {
+    (isFacultyPreviewingStudent ? setPreviewBenchStats : setBenchStats)((prev) => {
       const next: BenchSimulatorStats = {
         ...prev,
         lessonsCompleted: {
@@ -2280,11 +2533,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
       };
       try {
-        localStorage.setItem('bace_bench_stats', JSON.stringify(next));
+        if (!isFacultyPreviewingStudent) localStorage.setItem('bace_bench_stats', JSON.stringify(next));
       } catch {}
       return next;
     });
 
+    if (isFacultyPreviewingStudent) return;
     if (completed) {
       setStudents((prev) =>
         prev.map((s) => {
@@ -2337,6 +2591,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const teacherWorkspace = isProduction && role === 'teacher' && Boolean(currentUser);
+  const visibleClasses = isFacultyPreviewingStudent ? [] : teacherWorkspace ? classes.filter(c => c.teacher_id === currentUser.id) : classes;
+  const ownClassIds = new Set(visibleClasses.map(c => c.id));
+  const visibleStudents = isFacultyPreviewingStudent ? [previewStudent] : teacherWorkspace ? students.filter(s => ownClassIds.has(s.class_id)) : students;
+  const ownStudentIds = new Set(visibleStudents.map(s => s.profile.id));
+
   return (
     <AppContext.Provider
       value={{
@@ -2382,31 +2642,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         lessons,
         questions,
         achievements,
-        classes,
-        students,
-        teachers,
-        assignments,
-        assignmentProgress,
+        classes: visibleClasses,
+        students: visibleStudents,
+        teachers: isFacultyPreviewingStudent ? [] : teachers,
+        assignments: isFacultyPreviewingStudent ? [] : teacherWorkspace ? assignments.filter(a => ownClassIds.has(a.class_id)) : assignments,
+        assignmentProgress: isFacultyPreviewingStudent ? [] : teacherWorkspace ? assignmentProgress.filter(p => ownStudentIds.has(p.student_id)) : assignmentProgress,
         completedLessonIds,
-        activitySessions,
-        lessonGrades,
+        activitySessions: isFacultyPreviewingStudent ? previewSessions : teacherWorkspace ? activitySessions.filter(s => ownStudentIds.has(s.student_id || '')) : activitySessions,
+        lessonGrades: isFacultyPreviewingStudent ? previewGrades : teacherWorkspace ? lessonGrades.filter(g => ownStudentIds.has(g.student_id)) : lessonGrades,
         currentTeacher,
-        activeTeacherId,
+        activeTeacherId: currentUser?.role !== 'student' ? currentTeacher.id : activeTeacherId,
         setActiveTeacherId,
         createTeacherAccount,
         updateTeacherAccount,
         deleteTeacherAccount,
         currentStudent,
-        activeStudentId,
+        activeStudentId: isFacultyPreviewingStudent ? PREVIEW_STUDENT_ID : activeStudentId,
         setActiveStudentId,
         createStudentAccount,
         updateStudentAccount,
         deleteStudentAccount,
-        createTestStudent,
         isAccountModalOpen,
         setIsAccountModalOpen,
         accountModalTab,
         openAccountModal,
+        workspaceError,
+        refreshWorkspace: async () => { if (currentUser && !(await refreshCloudWorkspace(currentUser))) throw new Error('Shared classroom data could not refresh. Try again when connected.'); },
         overallReadiness,
         lastExamAttempt,
         setLastExamAttempt,
@@ -2435,8 +2696,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginDemoStudent,
         loginDemoTeacher,
         loginDemoAdmin,
-        facultyAccessCode,
-        updateFacultyAccessCode,
         isFacultyPreviewingStudent,
         returnToFacultyConsole,
         resetAllData,
@@ -2445,8 +2704,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         purgeDemoData,
         transferStudentPeriod,
         regenerateClassJoinCode,
-        resetStudentAccess,
-        benchStats,
+        benchStats: isFacultyPreviewingStudent ? previewBenchStats : benchStats,
         recordBenchActivity,
         markBenchLessonComplete,
       }}
@@ -2463,3 +2721,4 @@ export const useApp = () => {
   }
   return context;
 };
+

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { readExamDraft, examDraftKey, remainingSeconds } from '../../lib/examDraft';
+import { recordExamReviews } from '../../lib/studyReviews';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Clock,
   Flag,
@@ -15,31 +17,52 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Question, QuizAttempt } from '../../types/database';
 import { cleanQuestionText } from '../../utils/questionUtils';
+import { allocateQuestionsByPointWeight } from '../../data/baceBlueprint';
 
 export const MockExamRunner: React.FC = () => {
   const {
+    currentUser,
+    environment,
+    isProduction,
     activeExamConfig,
     questions,
     domains,
     currentStudent,
     recordExamSubmission,
+    isFacultyPreviewingStudent,
     setStudentPage,
   } = useApp();
 
+  const owner = isFacultyPreviewingStudent ? currentStudent.profile.id : currentUser?.id || currentStudent.profile.id;
+  const [draft] = useState(() => {
+    const saved = readExamDraft(owner, environment);
+    return saved?.config.quizType === activeExamConfig?.quizType && saved.questionIds.every(id => questions.some(q => q.id === id)) ? saved : null;
+  });
+  const [deadline] = useState(() => draft?.deadline || Date.now() + (activeExamConfig?.timeLimitMinutes || 30) * 60000);
+  const [startedAt] = useState(() => draft?.startedAt || new Date().toISOString());
+  const [attemptId] = useState(() => draft?.attemptId || `attempt_${crypto.randomUUID()}`);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [draftError, setDraftError] = useState('');
+  const submittedRef = useRef(false);
+  const autoSubmitAttempted = useRef(false);
+
   // Create or retrieve exam questions pool covering all 8 domains
   const [examQuestions] = useState<Question[]>(() => {
+    if (draft) return draft.questionIds.map(id => questions.find(q => q.id === id)!);
     const totalNeeded = activeExamConfig?.totalQuestions || 25;
     const selected: Question[] = [];
     const usedIds = new Set<string>();
 
-    // Step 1: Sample questions proportionally by domain exam_weight
+    // Step 1: Allocate exact integer targets from published category point weights.
+    // These are simulation targets, not a claim about unpublished current item counts.
+    const domainTargets = allocateQuestionsByPointWeight(totalNeeded);
     domains.forEach((d) => {
       const domainQs = questions
         .filter((q) => q.domain_id === d.id && q.active !== false)
         .sort(() => 0.5 - Math.random());
 
-      const weightFraction = (d.exam_weight || 12) / 100;
-      const targetCount = Math.max(1, Math.round(totalNeeded * weightFraction));
+      const targetCount = domainTargets[d.id] || 0;
       const countToTake = Math.min(targetCount, domainQs.length);
 
       for (let i = 0; i < countToTake; i++) {
@@ -61,42 +84,46 @@ export const MockExamRunner: React.FC = () => {
       }
     }
 
-    // If still less than totalNeeded, safely duplicate with unique IDs
-    let copyIdx = 0;
-    while (selected.length < totalNeeded && questions.length > 0) {
-      const baseQ = questions[copyIdx % questions.length];
-      selected.push({ ...baseQ, id: `${baseQ.id}_exam_${selected.length}` });
-      copyIdx++;
-    }
-
     // Step 3: Trim to totalNeeded and shuffle so domains are interleaved
     return selected.slice(0, totalNeeded).sort(() => 0.5 - Math.random());
   });
 
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({});
-  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
+  const [currentIndex, setCurrentIndex] = useState<number>(draft?.currentIndex || 0);
+  const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>(draft?.selectedChoices || {});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>(draft?.flaggedQuestions || {});
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
   const [showQuestionGrid, setShowQuestionGrid] = useState<boolean>(false);
 
-  // Timer logic
-  const initialSeconds = (activeExamConfig?.timeLimitMinutes || 30) * 60;
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(initialSeconds);
+  const examRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleFinalSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // The app scrolls its main panel, not the browser window.
+    examRootRef.current?.closest('main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [currentIndex]);
 
+  const initialSeconds = (activeExamConfig?.timeLimitMinutes || 30) * 60;
+  const [secondsRemaining, setSecondsRemaining] = useState(() => remainingSeconds(deadline));
+  const finalSubmitRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const tick = () => {
+      const remaining = remainingSeconds(deadline);
+      setSecondsRemaining(remaining);
+      if (remaining === 0 && !submittedRef.current && !autoSubmitAttempted.current) { autoSubmitAttempted.current = true; finalSubmitRef.current(); }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [deadline]);
+  useEffect(() => {
+    if (submittedRef.current) return;
+    try {
+      localStorage.setItem(examDraftKey(owner, environment), JSON.stringify({
+        version: 1, owner, config: activeExamConfig, questionIds: examQuestions.map(q => q.id),
+        currentIndex, selectedChoices, flaggedQuestions, deadline, startedAt, attemptId,
+      }));
+      setDraftError('');
+    } catch { setDraftError('This browser cannot save your exam draft. Keep the tab open.'); }
+  }, [owner, environment, currentIndex, selectedChoices, flaggedQuestions, deadline, attemptId]);
 
   const formatTimer = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -131,7 +158,9 @@ export const MockExamRunner: React.FC = () => {
   const unansweredCount = totalQuestions - answeredCount;
   const flaggedCount = Object.values(flaggedQuestions).filter(Boolean).length;
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
+    if (submittedRef.current || !examQuestions.length) return;
+    submittedRef.current = true; setSubmitting(true); setSubmitError('');
     let correctCount = 0;
     const domainBreakdown: Record<
       string,
@@ -166,25 +195,39 @@ export const MockExamRunner: React.FC = () => {
     const scorePercentage = Math.round((correctCount / totalQuestions) * 100);
 
     const attempt: QuizAttempt = {
-      id: `attempt_${Date.now()}`,
+      id: attemptId,
       student_id: currentStudent.profile.id,
       quiz_type: activeExamConfig?.quizType || 'mock_quick',
       score: correctCount,
       total_questions: totalQuestions,
       percentage: scorePercentage,
-      started_at: new Date(Date.now() - (initialSeconds - secondsRemaining) * 1000).toISOString(),
+      started_at: startedAt,
       completed_at: new Date().toISOString(),
-      time_spent_seconds: initialSeconds - secondsRemaining,
+      time_spent_seconds: Math.min(initialSeconds, Math.max(0, Math.round((Date.now()-Date.parse(startedAt))/1000))),
       domain_breakdown: domainBreakdown,
     };
 
-    recordExamSubmission(attempt);
+    try {
+      if (isProduction && currentUser && !isFacultyPreviewingStudent) {
+        await recordExamReviews(currentUser.id, examQuestions, selectedChoices);
+      }
+      await recordExamSubmission(attempt);
+      localStorage.removeItem(examDraftKey(owner, environment));
+    } catch(error: any) {
+      setSubmitError(error.message || 'Submission failed. Retry when connected.');
+      submittedRef.current = false;
+    } finally { setSubmitting(false); }
   };
+  finalSubmitRef.current = () => { void handleFinalSubmit(); };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+    <div ref={examRootRef} className="max-w-4xl mx-auto space-y-6 pb-20">
+      <p className="text-xs text-slate-600">Answers are saved on this browser for this account. The exam clock continues while you are away.</p>
+      {draftError && <p role="alert" className="text-amber-800">{draftError}</p>}
+      {submitError && <div role="alert" className="bg-rose-50 p-4 rounded-xl text-rose-800">{submitError} <button className="underline font-bold" onClick={() => void handleFinalSubmit()} disabled={submitting}>Retry submission</button></div>}
+      {submitting && <p role="status" className="text-blue-800">Saving your exam… keep this page open.</p>}
       {/* Top Testing Header with Timer & Progress */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 sticky top-20 z-30">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
             {activeExamConfig?.title || 'BACE Mock Exam'}
@@ -288,7 +331,7 @@ export const MockExamRunner: React.FC = () => {
       )}
 
       {/* Main Question Card */}
-      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6 scroll-mt-40">
         {/* Question Header: Domain & Flag */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center space-x-2 text-xs">
@@ -327,6 +370,7 @@ export const MockExamRunner: React.FC = () => {
             return (
               <button
                 key={choice.id}
+                disabled={submitting || secondsRemaining === 0}
                 onClick={() => handleSelectChoice(choice.id)}
                 className={`w-full text-left p-4 rounded-xl border text-sm flex items-center space-x-3.5 transition-all ${
                   isSelected
@@ -435,7 +479,8 @@ export const MockExamRunner: React.FC = () => {
               </button>
 
               <button
-                onClick={handleFinalSubmit}
+                disabled={submitting}
+                onClick={() => void handleFinalSubmit()}
                 className="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs"
               >
                 Submit Exam
@@ -447,3 +492,4 @@ export const MockExamRunner: React.FC = () => {
     </div>
   );
 };
+

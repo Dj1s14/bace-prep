@@ -28,6 +28,8 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isOpen, onClose 
     students,
     classes,
     currentTeacher,
+    currentUser,
+    isProduction,
     openAccountModal,
     setRole,
     setStudentPage,
@@ -67,15 +69,13 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isOpen, onClose 
       <div className="p-4 border-b border-slate-800">
         <div className="flex items-center justify-between text-xs uppercase font-semibold text-teal-400 tracking-wider mb-1">
           <span>Faculty Educator Console</span>
-          <button
-            onClick={() => openAccountModal('switch')}
-            className="text-[10px] text-teal-300 hover:text-teal-200 font-medium lowercase"
-          >
-            switch
-          </button>
+          {!isProduction && <button onClick={() => openAccountModal('switch')} className="text-[10px] text-teal-300 hover:text-teal-200 font-medium lowercase">switch</button>}
         </div>
         <div className="text-sm font-semibold text-white truncate">{teacherDisplayName}</div>
         <div className="text-xs text-slate-400 truncate">{teacherDepartment}</div>
+        <div className="text-xs text-teal-300 truncate mt-1">{currentTeacher.email}</div>
+        {isProduction && <p className="text-[10px] text-slate-400 mt-1">Your teacher workspace • Your assigned classes</p>}
+        {currentUser?.role === 'admin' && <button onClick={() => {setRole('admin');onClose();}} className="text-xs text-indigo-300 mt-2 underline">Return to Admin Portal</button>}
 
         <div className="mt-3 bg-teal-950/40 rounded-lg p-2.5 border border-teal-800/40">
           <div className="text-xs text-teal-200 font-medium">Cohort Exam Target</div>
@@ -139,7 +139,7 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isOpen, onClose 
           }}
           className="w-full py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-xs"
         >
-          <span>Open Candidate Portal</span>
+          <span>Preview Demo Student</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -178,3 +178,4 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isOpen, onClose 
     </>
   );
 };
+

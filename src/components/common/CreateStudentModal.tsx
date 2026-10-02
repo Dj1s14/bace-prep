@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Check, Mail, School, Hash } from 'lucide-react';
+import { ProvisionAccountModal } from './ProvisionAccountModal';
 import { useApp } from '../../context/AppContext';
 
 interface CreateStudentModalProps {
@@ -15,7 +16,7 @@ export const CreateStudentModal: React.FC<CreateStudentModalProps> = ({
   onCreated,
   initialClassId,
 }) => {
-  const { classes, createStudentAccount } = useApp();
+  const { classes, createStudentAccount, isProduction } = useApp();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -33,6 +34,8 @@ export const CreateStudentModal: React.FC<CreateStudentModalProps> = ({
   }, [initialClassId, isOpen, classes]);
 
   if (!isOpen) return null;
+
+  if (isProduction) return <ProvisionAccountModal accountRole="student" onClose={onClose} onCreated={onCreated} initialClassId={initialClassId} />;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

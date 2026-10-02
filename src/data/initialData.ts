@@ -12,6 +12,7 @@ import {
   LessonGradeRecord,
 } from '../types/database';
 import { ALL_QUESTIONS } from './questions';
+import { EXPANDED_TOPICS } from './expandedLearning';
 import { ALL_LESSONS } from './allLessons';
 import { BACE_BENCH_MODULES, BACE_LAB_ACTIVITIES } from './baceCurriculumData';
 
@@ -83,6 +84,7 @@ export const INITIAL_DOMAINS: Domain[] = [
 ];
 
 export const INITIAL_TOPICS: Topic[] = [
+  ...EXPANDED_TOPICS,
   // Biotechnology Skills (Domain 1)
   { id: 't1_1', domain_id: 'd1', name: 'Micropipetting', description: 'Volume ranges, tip selection, two-stop plunger operation, and calibration verification.', display_order: 1 },
   { id: 't1_2', domain_id: 'd1', name: 'Solution Preparation', description: 'Solid-mass dissolves, hydration factors, buffer formulation, and volume adjustment.', display_order: 2 },

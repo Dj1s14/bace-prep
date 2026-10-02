@@ -30,7 +30,7 @@ import { useApp } from '../../../context/AppContext';
 import { StudentActivitySession } from '../../../types/database';
 
 export const AccuracyTrendsChart: React.FC = () => {
-  const { activitySessions, currentStudent, deleteActivitySession } = useApp();
+  const { activitySessions, currentStudent, deleteActivitySession, isDemo } = useApp();
   const [filterType, setFilterType] = useState<'all' | 'mock' | 'drill'>('all');
   const [showSessionLog, setShowSessionLog] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -174,7 +174,7 @@ export const AccuracyTrendsChart: React.FC = () => {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All Sessions ({activitySessions.length})
+            All Sessions ({filteredSessions.length})
           </button>
           <button
             onClick={() => setFilterType('mock')}

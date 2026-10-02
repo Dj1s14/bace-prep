@@ -61,6 +61,7 @@ export interface UserAccount {
 }
 
 export interface TeacherProfile {
+  role?: 'teacher' | 'admin';
   id: string;
   prefix?: string; // 'Dr.', 'Mr.', 'Ms.', 'Mrs.', 'Prof.', etc.
   first_name: string;
@@ -137,6 +138,7 @@ export interface LabActivityScenario {
     id: string;
     text: string;
     is_correct: boolean;
+  explanation?: string;
     feedback: string;
   }>;
   explanation: string;
@@ -163,6 +165,7 @@ export interface Lesson {
   common_mistakes: string[];
   bace_exam_tip: string;
   sections: LessonSection[];
+  references?: Array<{ title: string; url: string }>;
   roadmap_topics?: string[];
   bench_modules?: BenchSkillTopic[];
   lab_activities?: LabActivityScenario[];
@@ -173,6 +176,7 @@ export interface QuestionChoice {
   question_id?: string;
   choice_text: string;
   is_correct: boolean;
+  explanation?: string;
   display_order?: number;
 }
 
@@ -212,6 +216,7 @@ export interface QuizAnswer {
   question_id: string;
   selected_choice_id: string;
   is_correct: boolean;
+  explanation?: string;
   answered_at: string;
 }
 
@@ -403,5 +408,6 @@ export interface UserAccount {
   class_id?: string;
   created_at: string;
 }
+
 
 

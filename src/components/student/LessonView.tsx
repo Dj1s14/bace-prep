@@ -1,3 +1,4 @@
+import { LessonVisual } from './LessonVisual';
 import React, { useState, useMemo } from 'react';
 import {
   ArrowLeft,
@@ -28,10 +29,155 @@ import { DomainIcon } from '../common/DomainIcon';
 import { LessonBenchGuide } from './LessonBenchGuide';
 import { LessonLabActivities } from './LessonLabActivities';
 import { AdaptiveMasteryModule } from './AdaptiveMasteryModule';
+import { LessonStudyToolkit } from './LessonStudyToolkit';
 import { ALL_MASTERY_LESSONS, getMasteryLesson } from '../../data/mastery';
 import { cleanQuestionText } from '../../utils/questionUtils';
+import { Lesson, BenchSkillTopic, LabActivityScenario } from '../../types/database';
+
+const buildFallbackBenchModules = (lesson: Lesson): BenchSkillTopic[] => {
+  const concepts = lesson.important_concepts?.filter(Boolean) || [];
+  const mistakes = lesson.common_mistakes?.filter(Boolean) || [];
+  const vocab = lesson.key_vocabulary?.filter(Boolean) || [];
+  const primaryConcept = concepts[0] || lesson.description;
+  const secondaryConcept = concepts[1] || lesson.bace_exam_tip;
+  const keyTerms = vocab.slice(0, 4).map((item) => item.term).join(', ');
+
+  return [
+    {
+      title: `${lesson.title}: Bench Readiness`,
+      core_idea: lesson.description,
+      purpose: primaryConcept,
+      condition:
+        'Perform the task only under the approved laboratory SOP, with the correct PPE, labeled materials, verified equipment status, and instructor or supervisor authorization.',
+      evidence:
+        'Record the sample or material identity, date/time, equipment or lot identifiers when applicable, observations, calculations, deviations, and final result using good documentation practices.',
+      where_in_lab:
+        'This competency may appear at a preparation bench, analytical station, biosafety workspace, documentation station, or quality-control checkpoint depending on the lesson.',
+      procedure_awareness: [
+        'Read the applicable SOP and confirm the correct materials, equipment, settings, and sequence before beginning.',
+        primaryConcept,
+        secondaryConcept,
+        'Pause and resolve any unexpected condition before continuing when the validity, safety, or traceability of the work could be affected.',
+      ].filter(Boolean),
+      material_details: [
+        keyTerms ? `Know the purpose and correct use of key terms/materials such as: ${keyTerms}.` : 'Verify the identity and suitability of all materials before use.',
+        'Check labels, expiration or preparation dates, required storage conditions, and equipment status where applicable.',
+        'Use clean or sterile consumables when the procedure requires contamination control.',
+      ],
+      what_to_notice:
+        'Compare the observed result with the expected appearance, measurement, control behavior, and procedural acceptance criteria described in the lesson and SOP.',
+      signs_of_valid_result: [
+        'Required controls or checks behave as expected.',
+        'Measurements or observations are internally consistent and fall within the stated acceptance criteria.',
+        'Documentation is complete enough for another technician to reconstruct what was done.',
+      ],
+      connecting_to_decision: [
+        'Accept and document the result when required checks and acceptance criteria are met.',
+        'Investigate before reporting when a control, instrument check, label, or procedural step is questionable.',
+        'Escalate deviations or out-of-specification findings according to the SOP rather than improvising a correction.',
+      ],
+      common_problems:
+        mistakes.length > 0
+          ? mistakes.slice(0, 4)
+          : [
+              'Skipping a required verification step.',
+              'Using the wrong material, setting, unit, or sequence.',
+              'Failing to document an unexpected result or deviation.',
+            ],
+      prevention: [
+        'Use a pre-run checklist and verify the SOP version before starting.',
+        'Label materials before or immediately as they are prepared, according to local procedure.',
+        'Check calculations, units, controls, and instrument status before accepting results.',
+        'Document corrections transparently; never erase or obscure original data.',
+      ],
+      impact_on_work: [
+        'Poor technique can invalidate the result and require repeat work.',
+        'Incomplete traceability can make otherwise correct work unusable for quality purposes.',
+        'Recognizing an error early protects safety, sample integrity, time, and downstream decisions.',
+      ],
+    },
+  ];
+};
+
+const buildFallbackLabActivities = (lesson: Lesson): LabActivityScenario[] => {
+  const mistake = lesson.common_mistakes?.[0] || 'a required verification step was skipped';
+  const concept = lesson.important_concepts?.[0] || lesson.description;
+
+  return [
+    {
+      id: `${lesson.id}_fallback_scenario_1`,
+      title: 'Procedure Deviation at the Bench',
+      scenario: `While working on ${lesson.title}, you realize that ${mistake}. The work is not yet reported. What is the best technician response?`,
+      options: [
+        {
+          id: 'a',
+          text: 'Continue the procedure and only mention the issue if the final result looks abnormal.',
+          is_correct: false,
+          feedback: 'Continuing can compound the error and may make the final result unreliable.',
+        },
+        {
+          id: 'b',
+          text: 'Stop at a safe point, preserve the sample/materials, document what occurred, and follow the SOP or supervisor instructions for the deviation.',
+          is_correct: true,
+          feedback: 'Correct. A technician should protect safety and traceability, then follow the approved deviation process.',
+        },
+        {
+          id: 'c',
+          text: 'Correct the record so the skipped step appears to have been completed.',
+          is_correct: false,
+          feedback: 'Records must reflect what actually occurred. Never backfill or falsify a completed step.',
+        },
+        {
+          id: 'd',
+          text: 'Discard everything immediately without documenting the event.',
+          is_correct: false,
+          feedback: 'Disposal may eventually be required, but the event and decision must first be handled according to procedure.',
+        },
+      ],
+      explanation:
+        'When a procedural deviation could affect safety, identity, traceability, or result validity, the correct response is to stop safely, document the actual event, and follow the approved SOP or escalation process.',
+      bace_competency: `BACE application: ${concept}`,
+    },
+    {
+      id: `${lesson.id}_fallback_scenario_2`,
+      title: 'Unexpected Result or Control Check',
+      scenario: `You complete a task related to ${lesson.title}, but the result does not match the expected pattern or acceptance criteria. What should you do first?`,
+      options: [
+        {
+          id: 'a',
+          text: 'Report the result as valid because the procedure was completed.',
+          is_correct: false,
+          feedback: 'Completion of the procedure does not automatically make the result valid.',
+        },
+        {
+          id: 'b',
+          text: 'Change the result to the expected value and document the expected value instead.',
+          is_correct: false,
+          feedback: 'Data must never be altered to fit expectations.',
+        },
+        {
+          id: 'c',
+          text: 'Verify controls, calculations, labels, equipment status, and critical procedural steps before deciding whether the result can be accepted or must be repeated.',
+          is_correct: true,
+          feedback: 'Correct. Troubleshooting begins by checking the factors that establish result validity.',
+        },
+        {
+          id: 'd',
+          text: 'Repeat the test immediately using different settings until the expected result appears.',
+          is_correct: false,
+          feedback: 'Unapproved changes can create a second deviation. Determine the cause and follow the authorized repeat procedure.',
+        },
+      ],
+      explanation:
+        'Unexpected results require a structured validity check. Controls, calculations, sample identity, equipment status, and procedural compliance should be reviewed before acceptance, repeat testing, or escalation.',
+      bace_competency: `BACE troubleshooting: ${lesson.bace_exam_tip}`,
+    },
+  ];
+};
 
 export const LessonView: React.FC = () => {
+  const lessonRootRef = React.useRef<HTMLDivElement>(null);
+  const scrollLesson = (top = 0) => lessonRootRef.current?.closest('main')?.scrollTo({ top, left: 0, behavior: 'auto' });
   const {
     lessons,
     selectedLessonId,
@@ -50,38 +196,70 @@ export const LessonView: React.FC = () => {
   const lesson = lessons.find((l) => l.id === selectedLessonId) || lessons[0];
   const domain = domains.find((d) => d.id === lesson?.domain_id) || domains[0];
 
+  const effectiveBenchModules = useMemo(
+    () => (lesson.bench_modules && lesson.bench_modules.length > 0 ? lesson.bench_modules : buildFallbackBenchModules(lesson)),
+    [lesson]
+  );
+
+  const effectiveLabActivities = useMemo(
+    () => (lesson.lab_activities && lesson.lab_activities.length > 0 ? lesson.lab_activities : buildFallbackLabActivities(lesson)),
+    [lesson]
+  );
+
+
   // Active module view tab: theory, bench protocol guide, troubleshooting scenarios, assessment, or mastery
-  const [activeTab, setActiveTab] = useState<'theory' | 'bench_guide' | 'activities' | 'assessment' | 'mastery'>('theory');
+  const [activeTab, setActiveTab] = useState<'study' | 'theory' | 'bench_guide' | 'activities' | 'assessment' | 'mastery'>('study');
 
   // Mastery lesson for current lesson
   const defaultMasteryLesson = useMemo(() => {
-    return getMasteryLesson(lesson.id) || ALL_MASTERY_LESSONS[0];
+    return getMasteryLesson(lesson.id);
   }, [lesson.id]);
 
-  const [selectedMasteryLessonId, setSelectedMasteryLessonId] = useState<string>(defaultMasteryLesson.lesson_metadata.lesson_id);
+  const [selectedMasteryLessonId, setSelectedMasteryLessonId] = useState<string>(defaultMasteryLesson?.lesson_metadata.lesson_id || '');
 
   // Sync selectedMasteryLessonId when lesson.id changes
   React.useEffect(() => {
     const matched = getMasteryLesson(lesson.id);
-    if (matched) {
-      setSelectedMasteryLessonId(matched.lesson_metadata.lesson_id);
-    }
+    setSelectedMasteryLessonId(matched?.lesson_metadata.lesson_id || '');
+  }, [lesson.id]);
+
+  React.useEffect(() => {
+    scrollLesson();
   }, [lesson.id]);
 
   const activeMasteryLesson = useMemo(() => {
     return ALL_MASTERY_LESSONS.find(m => m.lesson_metadata.lesson_id === selectedMasteryLessonId) || defaultMasteryLesson;
   }, [selectedMasteryLessonId, defaultMasteryLesson]);
 
-  // All 150 questions for this lesson
+  // Questions mapped to this lesson (with topic/domain fallback for legacy lessons)
   const allLessonQuestions = useMemo(() => {
-    const matched = questions.filter((q) => q.lesson_id === lesson.id);
+    const available = questions.filter(q => q.active !== false);
+    const matched = available.filter((q) => q.lesson_id === lesson.id);
     if (matched.length > 0) return matched;
-    return questions.filter((q) => q.topic_id === lesson.topic_id || q.domain_id === lesson.domain_id);
+    const topicQuestions = available.filter(q => q.topic_id === lesson.topic_id);
+    return topicQuestions.length ? topicQuestions : available.filter(q => q.domain_id === lesson.domain_id);
   }, [questions, lesson.id, lesson.topic_id, lesson.domain_id]);
 
   // Quiz vs Browse mode
   const [assessmentMode, setAssessmentMode] = useState<'quiz' | 'browse'>('quiz');
   const [drillSize, setDrillSize] = useState<number>(5);
+
+  const drillSizeOptions = useMemo(() => {
+    const fullBank = allLessonQuestions.length;
+    return Array.from(
+      new Set([...([5, 10, 25, 50].filter((size) => size < fullBank)), fullBank])
+    ).filter((size) => size > 0);
+  }, [allLessonQuestions.length]);
+
+  React.useEffect(() => {
+    setDrillSize(Math.min(5, Math.max(1, allLessonQuestions.length)));
+    setDifficultyFilter('all');
+    setBrowseSearch('');
+    setBrowsePage(1);
+    setSelectedAnswers({});
+    setSubmittedAnswers({});
+    setLessonFinished(false);
+  }, [lesson.id, allLessonQuestions.length]);
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
   const [seed, setSeed] = useState<number>(0);
   const [browseSearch, setBrowseSearch] = useState<string>('');
@@ -213,7 +391,7 @@ export const LessonView: React.FC = () => {
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
 
   return (
-    <div className="space-y-8 pb-16 max-w-4xl mx-auto">
+    <div ref={lessonRootRef} className="lesson-page space-y-7 pb-16 max-w-4xl mx-auto">
       {/* Top Breadcrumb & Return button */}
       <div className="flex items-center justify-between">
         <button
@@ -293,6 +471,18 @@ export const LessonView: React.FC = () => {
       {/* Lesson Navigation Tabs: Theory, Bench Guide, Troubleshooting Scenarios, Assessment, Mastery */}
       <div className="flex items-center space-x-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto scrollbar-none shadow-2xs">
         <button
+          onClick={() => setActiveTab('study')}
+          className={`flex-1 min-w-[155px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
+            activeTab === 'study'
+              ? 'bg-white text-violet-700 shadow-2xs'
+              : 'text-violet-700 hover:text-violet-900 hover:bg-white/50'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-violet-600" />
+          <span>Study Sheet</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('theory')}
           className={`flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
             activeTab === 'theory'
@@ -315,7 +505,7 @@ export const LessonView: React.FC = () => {
           <Target className="w-4 h-4 text-emerald-400" />
           <span>100% Mastery Drill</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-            {activeMasteryLesson.competencies.length}
+            {activeMasteryLesson?.competencies.length ?? 0}
           </span>
         </button>
 
@@ -329,11 +519,9 @@ export const LessonView: React.FC = () => {
         >
           <FlaskConical className="w-4 h-4 text-teal-600" />
           <span>Bench Guide</span>
-          {lesson.bench_modules && lesson.bench_modules.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-800 font-bold">
-              {lesson.bench_modules.length}
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-800 font-bold">
+              {effectiveBenchModules.length}
             </span>
-          )}
         </button>
 
         <button
@@ -346,11 +534,9 @@ export const LessonView: React.FC = () => {
         >
           <ShieldAlert className="w-4 h-4 text-indigo-600" />
           <span>Troubleshooting</span>
-          {lesson.lab_activities && lesson.lab_activities.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold">
-              {lesson.lab_activities.length}
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold">
+              {effectiveLabActivities.length}
             </span>
-          )}
         </button>
 
         <button
@@ -368,6 +554,11 @@ export const LessonView: React.FC = () => {
           </span>
         </button>
       </div>
+
+      {/* STUDY SHEET: ACTIVE RECALL & HIGH-YIELD REVIEW */}
+      {activeTab === 'study' && (
+        <LessonStudyToolkit lesson={lesson} />
+      )}
 
       {/* TAB 1: CURRICULUM THEORY */}
       {activeTab === 'theory' && (
@@ -432,12 +623,22 @@ export const LessonView: React.FC = () => {
             </ul>
           </div>
 
+          <LessonVisual lessonId={lesson.id} />
+
+          <nav aria-label="Lesson contents" className="bg-slate-50 rounded-2xl border border-slate-200 p-5">
+            <h2 className="text-base font-bold text-slate-900 mb-3">In this lesson</h2>
+            <ol className="grid sm:grid-cols-2 gap-2">
+              {lesson.sections.map((section, index) => <li key={index}><button className="text-left text-sm text-blue-700 hover:underline py-2" onClick={() => lessonRootRef.current?.querySelector(`#lesson-section-${index}`)?.scrollIntoView({block:'start',behavior:'auto'})}>{section.title}</button></li>)}
+            </ol>
+          </nav>
+
           {/* Instructional Material Sections */}
           <div className="space-y-6">
             {lesson.sections.map((section, idx) => (
               <div
                 key={idx}
-                className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-3"
+                id={`lesson-section-${idx}`}
+                className="lesson-section bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 space-y-3"
               >
                 <h3 className="text-lg font-bold text-slate-900">{section.title}</h3>
                 <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
@@ -446,6 +647,16 @@ export const LessonView: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {lesson.references?.length ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+              <h3 className="font-bold text-slate-900 mb-3">Sources & Further Reading</h3>
+              <ul className="space-y-2">
+                {lesson.references.map(source => <li key={source.url}><a className="text-sm text-blue-700 underline" href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}
+              </ul>
+              <p className="text-xs text-slate-600 mt-3">Original preparation material. For actual laboratory work, follow approved local procedures and required training.</p>
+            </div>
+          ) : null}
 
           {/* Worked Examples */}
           {lesson.worked_examples && lesson.worked_examples.length > 0 && (
@@ -515,7 +726,7 @@ export const LessonView: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('bench_guide');
-                window.scrollTo({ top: 300, behavior: 'smooth' });
+                scrollLesson();
               }}
               className="inline-flex items-center space-x-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2.5 rounded-xl transition-colors shadow-2xs shrink-0"
             >
@@ -529,7 +740,7 @@ export const LessonView: React.FC = () => {
       {/* TAB 2: TECHNICIAN BENCH GUIDE */}
       {activeTab === 'bench_guide' && (
         <div className="space-y-6">
-          <LessonBenchGuide modules={lesson.bench_modules || []} lessonTitle={lesson.title} />
+          <LessonBenchGuide modules={effectiveBenchModules} lessonTitle={lesson.title} />
 
           {/* Next Stage Navigation Banner */}
           <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -544,7 +755,7 @@ export const LessonView: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('activities');
-                window.scrollTo({ top: 300, behavior: 'smooth' });
+                scrollLesson();
               }}
               className="inline-flex items-center space-x-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 rounded-xl transition-colors shadow-2xs shrink-0"
             >
@@ -558,7 +769,7 @@ export const LessonView: React.FC = () => {
       {/* TAB 3: TROUBLESHOOTING SCENARIOS */}
       {activeTab === 'activities' && (
         <div className="space-y-6">
-          <LessonLabActivities activities={lesson.lab_activities || []} lessonTitle={lesson.title} />
+          <LessonLabActivities activities={effectiveLabActivities} lessonTitle={lesson.title} />
 
           {/* Next Stage Navigation Banner */}
           <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-teal-50 border border-blue-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -573,7 +784,7 @@ export const LessonView: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('assessment');
-                window.scrollTo({ top: 300, behavior: 'smooth' });
+                scrollLesson();
               }}
               className="inline-flex items-center space-x-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl transition-colors shadow-2xs shrink-0"
             >
@@ -634,7 +845,7 @@ export const LessonView: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-600">Drill Size:</span>
-                {[5, 10, 25, 50, 150].map((sz) => (
+                {drillSizeOptions.map((sz) => (
                   <button
                     key={sz}
                     onClick={() => {
@@ -647,7 +858,7 @@ export const LessonView: React.FC = () => {
                         : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {sz === 150 ? 'Full Bank' : `${sz} Qs`}
+                    {sz === allLessonQuestions.length ? `Full Bank (${allLessonQuestions.length})` : `${sz} Qs`}
                   </button>
                 ))}
               </div>
@@ -670,7 +881,7 @@ export const LessonView: React.FC = () => {
                 <button
                   onClick={handleShuffle}
                   className="inline-flex items-center space-x-1 px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-semibold transition-colors"
-                  title="Draw a new random set from the 150 questions"
+                  title={`Draw a new random set from ${allLessonQuestions.length} lesson questions`}
                 >
                   <Shuffle className="w-3.5 h-3.5 text-slate-500" />
                   <span>Shuffle</span>
@@ -831,7 +1042,7 @@ export const LessonView: React.FC = () => {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search 150 lesson questions..."
+                  placeholder={`Search ${allLessonQuestions.length} lesson questions...`}
                   value={browseSearch}
                   onChange={(e) => {
                     setBrowseSearch(e.target.value);
@@ -940,7 +1151,7 @@ export const LessonView: React.FC = () => {
                   BACE Exam Domain Mastery Modules
                 </div>
                 <div className="text-sm font-bold text-slate-900">
-                  Select Competency Module ({ALL_MASTERY_LESSONS.length} Verified Modules Available)
+                  Select Competency Module ({ALL_MASTERY_LESSONS.length} Modules Available)
                 </div>
               </div>
             </div>
@@ -951,10 +1162,11 @@ export const LessonView: React.FC = () => {
               </label>
               <select
                 id="mastery-module-select"
-                value={activeMasteryLesson.lesson_metadata.lesson_id}
+                value={activeMasteryLesson?.lesson_metadata.lesson_id || ''}
                 onChange={(e) => setSelectedMasteryLessonId(e.target.value)}
                 className="text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
               >
+                <option value="" disabled>Choose a mastery module</option>
                 {ALL_MASTERY_LESSONS.map((m) => (
                   <option key={m.lesson_metadata.lesson_id} value={m.lesson_metadata.lesson_id}>
                     [{m.lesson_metadata.domain}] {m.lesson_metadata.sublesson}
@@ -965,11 +1177,11 @@ export const LessonView: React.FC = () => {
           </div>
 
           {/* Render the Interactive Adaptive Engine */}
-          <AdaptiveMasteryModule
+          {activeMasteryLesson ? <AdaptiveMasteryModule
             key={activeMasteryLesson.lesson_metadata.lesson_id}
             masteryLesson={activeMasteryLesson}
             onExit={() => setActiveTab('theory')}
-          />
+          /> : <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-slate-700">This lesson has no dedicated adaptive mastery module yet. Use its lesson assessment, or choose a separate module above.</div>}
         </div>
       )}
 
@@ -979,7 +1191,7 @@ export const LessonView: React.FC = () => {
           onClick={() => {
             if (prevLesson) {
               setSelectedLessonId(prevLesson.id);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              scrollLesson();
             } else {
               setStudentPage('domain_detail');
             }
@@ -1001,7 +1213,7 @@ export const LessonView: React.FC = () => {
           onClick={() => {
             if (nextLesson) {
               setSelectedLessonId(nextLesson.id);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              scrollLesson();
             } else {
               setStudentPage('learn');
             }

@@ -1,3 +1,4 @@
+import { FacultyRoleModal } from '../common/FacultyRoleModal';
 import React, { useState } from 'react';
 import {
   ShieldCheck,
@@ -33,6 +34,9 @@ import {
 import { useApp } from '../../context/AppContext';
 import { StudentOverview, TeacherProfile, SchoolClass } from '../../types/database';
 import { testSupabaseConnection, syncQuestionsToSupabase, syncAssignmentsToSupabase } from '../../lib/supabase';
+import { AdminPasswordResetModal } from '../common/AdminPasswordResetModal';
+import { AssignClassTeacherModal } from '../common/AssignClassTeacherModal';
+import { ProvisionAccountModal } from '../common/ProvisionAccountModal';
 import { CreateStudentModal } from '../common/CreateStudentModal';
 
 export const AdminPortal: React.FC = () => {
@@ -53,6 +57,8 @@ export const AdminPortal: React.FC = () => {
     googleUser,
     openAuthModal,
     resetAllData,
+    isProduction,
+    currentUser,
   } = useApp();
 
   // Local tab override or use adminPage from context
@@ -64,6 +70,10 @@ export const AdminPortal: React.FC = () => {
   const [teacherSearch, setTeacherSearch] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
+  const [passwordResetAccount, setPasswordResetAccount] = useState<{ id: string; email: string; name: string } | null>(null);
+
+  const [facultyRoleAccount, setFacultyRoleAccount] = useState<TeacherProfile | null>(null);
+
   // Confirmation Modals
   const [studentToDelete, setStudentToDelete] = useState<StudentOverview | null>(null);
   const [studentToTransfer, setStudentToTransfer] = useState<StudentOverview | null>(null);
@@ -71,6 +81,9 @@ export const AdminPortal: React.FC = () => {
   const [teacherToDelete, setTeacherToDelete] = useState<TeacherProfile | null>(null);
   const [classToDelete, setClassToDelete] = useState<SchoolClass | null>(null);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  const [classTeacherAssignment, setClassTeacherAssignment] = useState<{ teacherId?: string; classId?: string } | null>(null);
+  const [creatingClass, setCreatingClass] = useState(false);
 
   // Creation Modals
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
@@ -162,6 +175,11 @@ export const AdminPortal: React.FC = () => {
   // Create Teacher handler
   const handleCreateTeacher = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProduction) {
+      showNotice('Production teacher identities must be provisioned in Supabase Auth; no local teacher account was created.');
+      setIsAddTeacherOpen(false);
+      return;
+    }
     if (!newTFirstName.trim() || !newTLastName.trim() || !newTEmail.trim()) return;
 
     createTeacherAccount({
@@ -181,21 +199,25 @@ export const AdminPortal: React.FC = () => {
   };
 
   // Create Class handler
-  const handleCreateClass = (e: React.FormEvent) => {
+  const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClassName.trim()) return;
-
-    createClass({
+    if (!newClassName.trim() || creatingClass) return;
+    if (!newAssignedTeacher) { showNotice('Choose a teacher for this class.'); return; }
+    setCreatingClass(true);
+    try {
+    await createClass({
       name: newClassName.trim(),
-      teacher_id: newAssignedTeacher || (teachers[0]?.id || ''),
+      teacher_id: newAssignedTeacher,
       period: newGradeLevel || 'Period 1',
-      school_year: '2025-2026',
-      join_code: `BACE${Math.floor(100 + Math.random() * 900)}`,
+      school_year: '2026-2027',
+      join_code: `BACE-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`,
     });
 
     showNotice(`Created class "${newClassName.trim()}"`);
     setNewClassName('');
     setIsAddClassOpen(false);
+    } catch (error) { showNotice((error as any)?.message || 'Class could not be saved.'); }
+    finally { setCreatingClass(false); }
   };
 
   // Test Supabase Connection
@@ -218,6 +240,9 @@ export const AdminPortal: React.FC = () => {
     setSyncStatus('Syncing BACE curriculum questions and assignments to Supabase...');
     try {
       const qRes = await syncQuestionsToSupabase(questions);
+      if (qRes.error) {
+        throw new Error(qRes.error);
+      }
       setSyncStatus(`Database synchronization completed: ${qRes.count} questions checked/synced.`);
     } catch (err: any) {
       setSyncStatus(`Sync error: ${err?.message || 'Check database permissions'}`);
@@ -400,8 +425,8 @@ export const AdminPortal: React.FC = () => {
                   <Briefcase className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-teal-700">Add Real Teacher</div>
-                  <div className="text-[10px] text-slate-500">Create verified instructor</div>
+                  <div className="text-xs font-bold text-slate-900 group-hover:text-teal-700">Provision Teacher</div>
+                  <div className="text-[10px] text-slate-500">Supabase Auth administrator action</div>
                 </div>
               </button>
 
@@ -517,7 +542,7 @@ export const AdminPortal: React.FC = () => {
                     onClick={() => setIsAddTeacherOpen(true)}
                     className="mt-3 text-xs font-semibold text-teal-600 hover:underline"
                   >
-                    + Add first real teacher
+                    + Provision first teacher
                   </button>
                 </div>
               ) : (
@@ -531,6 +556,7 @@ export const AdminPortal: React.FC = () => {
                         <div>
                           <div className="text-xs font-bold text-slate-900">
                             {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name}
+{t.role === 'admin' && <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-2 py-1 text-indigo-800">Admin + Teacher</span>}
                           </div>
                           <div className="text-[10px] text-slate-500">{t.email}</div>
                         </div>
@@ -538,7 +564,7 @@ export const AdminPortal: React.FC = () => {
                       <div className="flex items-center space-x-3">
                         <span className="text-[11px] text-slate-500">{t.department}</span>
                         <button
-                          onClick={() => setTeacherToDelete(t)}
+                          disabled={t.role === 'admin'} onClick={() => setTeacherToDelete(t)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                           title="Remove Teacher"
                         >
@@ -731,6 +757,7 @@ export const AdminPortal: React.FC = () => {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end space-x-2">
+<button onClick={() => setPasswordResetAccount({ id: s.profile.id, email: s.profile.email, name: `${s.profile.first_name} ${s.profile.last_name}` })} className="px-2.5 py-1.5 rounded-lg text-amber-800 bg-amber-50 border border-amber-200 font-semibold text-[11px]">Reset Password</button>
                               <button
                                 onClick={() => {
                                   setStudentToTransfer(s);
@@ -803,13 +830,13 @@ export const AdminPortal: React.FC = () => {
                 <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-sm font-bold text-slate-800">No Teachers Found</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                  Add a verified instructor to begin assigning BACE coursework.
+                  Create a teacher account here, then assign classes to give them access to their rosters and coursework.
                 </p>
                 <button
                   onClick={() => setIsAddTeacherOpen(true)}
                   className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-xs"
                 >
-                  + Add Teacher Account
+                  + Provision Teacher
                 </button>
               </div>
             ) : (
@@ -837,6 +864,7 @@ export const AdminPortal: React.FC = () => {
                               <div>
                                 <div className="font-bold text-slate-900">
                                   {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name}
+{t.role === 'admin' && <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-2 py-1 text-indigo-800">Admin + Teacher</span>}
                                 </div>
                                 <div className="text-[11px] text-slate-500">{t.email}</div>
                               </div>
@@ -855,8 +883,11 @@ export const AdminPortal: React.FC = () => {
                             {t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Active'}
                           </td>
                           <td className="py-3 px-4 text-right">
+                            {t.id !== currentUser?.id && <button onClick={() => setFacultyRoleAccount(t)} className="mr-2 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 font-semibold">{t.role === 'admin' ? 'Remove Admin Access' : 'Grant Admin Access'}</button>}
+{t.role !== 'admin' && <button onClick={() => setPasswordResetAccount({ id: t.id, email: t.email, name: `${t.first_name} ${t.last_name}` })} className="mr-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-semibold">Reset Password</button>}
+<button onClick={() => setClassTeacherAssignment({ teacherId: t.id })} className="mr-2 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">Assign Class</button>
                             <button
-                              onClick={() => setTeacherToDelete(t)}
+                              disabled={t.role === 'admin'} onClick={() => setTeacherToDelete(t)}
                               className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 transition-colors font-semibold text-[11px]"
                               title="Remove Teacher from Application"
                             >
@@ -930,6 +961,8 @@ export const AdminPortal: React.FC = () => {
                       Instructor: <strong className="text-slate-700">{teacher ? `${teacher.prefix || ''} ${teacher.first_name} ${teacher.last_name}` : 'Unassigned'}</strong>
                     </p>
                   </div>
+
+                  <button onClick={() => setClassTeacherAssignment({ classId: cls.id, teacherId: teacher?.id })} className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Assign / Change Teacher</button>
 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                     <div>
@@ -1195,13 +1228,13 @@ export const AdminPortal: React.FC = () => {
       )}
 
       {/* ADD REAL TEACHER MODAL */}
-      {isAddTeacherOpen && (
+      {isAddTeacherOpen && !isProduction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden">
             <div className="bg-teal-700 text-white px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Briefcase className="w-5 h-5" />
-                <h3 className="text-sm font-bold">Add Real Verified Teacher</h3>
+                <h3 className="text-sm font-bold">Provision Verified Teacher</h3>
               </div>
               <button
                 onClick={() => setIsAddTeacherOpen(false)}
@@ -1294,7 +1327,7 @@ export const AdminPortal: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition-colors shadow-xs"
                 >
-                  Create Teacher Account
+                  Provision Teacher
                 </button>
               </div>
             </form>
@@ -1345,6 +1378,7 @@ export const AdminPortal: React.FC = () => {
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Assign Teacher</label>
                 <select
+                  required
                   value={newAssignedTeacher}
                   onChange={(e) => setNewAssignedTeacher(e.target.value)}
                   className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white"
@@ -1352,7 +1386,8 @@ export const AdminPortal: React.FC = () => {
                   <option value="">Select Instructor...</option>
                   {teachers.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name} ({t.email})
+                      {t.prefix ? `${t.prefix} ` : ''}{t.first_name} {t.last_name}
+{t.role === 'admin' && <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-2 py-1 text-indigo-800">Admin + Teacher</span>} ({t.email})
                     </option>
                   ))}
                 </select>
@@ -1368,9 +1403,10 @@ export const AdminPortal: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-xs"
+                  disabled={creatingClass}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-xs disabled:opacity-50"
                 >
-                  Create Class Section
+                  {creatingClass ? 'Saving…' : 'Create Class Section'}
                 </button>
               </div>
             </form>
@@ -1451,7 +1487,13 @@ export const AdminPortal: React.FC = () => {
         </div>
       )}
 
-      {/* CREATE STUDENT MODAL REUSE */}
+      {isAddTeacherOpen && isProduction && <ProvisionAccountModal accountRole="teacher" onClose={() => setIsAddTeacherOpen(false)} />}
+
+      {classTeacherAssignment && <AssignClassTeacherModal initialTeacherId={classTeacherAssignment.teacherId} initialClassId={classTeacherAssignment.classId} onClose={() => setClassTeacherAssignment(null)} />}
+
+      {facultyRoleAccount && <FacultyRoleModal account={facultyRoleAccount} onClose={() => setFacultyRoleAccount(null)} />}
+      {passwordResetAccount && <AdminPasswordResetModal account={passwordResetAccount} onClose={() => setPasswordResetAccount(null)} />}
+{/* CREATE STUDENT MODAL REUSE */}
       <CreateStudentModal
         isOpen={isAddStudentOpen}
         onClose={() => setIsAddStudentOpen(false)}
@@ -1459,3 +1501,4 @@ export const AdminPortal: React.FC = () => {
     </div>
   );
 };
+
