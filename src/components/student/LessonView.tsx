@@ -505,7 +505,7 @@ export const LessonView: React.FC = () => {
           <Target className="w-4 h-4 text-emerald-400" />
           <span>100% Mastery Drill</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-            {activeMasteryLesson.competencies.length}
+            {activeMasteryLesson?.competencies.length ?? 0}
           </span>
         </button>
 
