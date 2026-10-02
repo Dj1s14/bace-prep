@@ -28,6 +28,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     googleUser,
     openAuthModal,
     setRole,
+    currentUser,
   } = useApp();
 
   const navItems: Array<{
@@ -124,6 +125,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
           Portal Workspaces
         </div>
         <button
+          title={`Open your own teacher workspace (${currentUser?.email || 'signed-in account'})`}
           onClick={() => {
             setRole('teacher');
             onClose();
@@ -131,7 +133,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
           className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-teal-300 hover:bg-slate-800/50 transition-colors"
         >
           <Briefcase className="w-4 h-4 text-teal-400" />
-          <span>Switch to Faculty Portal</span>
+          <span>My Teacher Workspace</span>
         </button>
         <button
           onClick={() => {
@@ -141,7 +143,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
           className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-blue-300 hover:bg-slate-800/50 transition-colors"
         >
           <GraduationCap className="w-4 h-4 text-blue-400" />
-          <span>Switch to Student Portal</span>
+          <span>Student Preview — Demo Student</span>
         </button>
       </nav>
 
@@ -180,3 +182,4 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     </>
   );
 };
+

@@ -756,6 +756,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const setActiveTeacherId = (id: string) => {
+    // Live workspaces never impersonate a roster account.
+    if (isProduction && id && id !== currentUser?.id) return;
     setActiveTeacherIdState(id);
     saveEnvData(environment, 'active_teacher_id', id);
     if (environment === 'production') {
@@ -954,13 +956,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Active teacher resolver
   const currentTeacher: TeacherProfile = React.useMemo(() => {
     if (currentUser && currentUser.role !== 'student') return resolveTeacherIdentity(currentUser);
+    if (isProduction) return DEFAULT_EMPTY_TEACHER;
     if (activeTeacherId) {
       const found = teachers.find((t) => t.id === activeTeacherId);
       if (found) return found;
     }
     if (teachers.length > 0) return teachers[0];
     return DEFAULT_EMPTY_TEACHER;
-  }, [currentUser, activeTeacherId, teachers]);
+  }, [currentUser, activeTeacherId, teachers, isProduction]);
 
   // Completed lessons for the currently active student only
   const completedLessonIds = React.useMemo(() => {
@@ -1041,6 +1044,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setRole = (newRole: UserRole) => {
     if (currentUser && !canOpenPortal(currentUser.role, newRole)) return;
+    if (newRole === 'teacher' && currentUser && currentUser.role !== 'student') {
+      setActiveTeacherIdState(currentUser.id);
+      setSelectedStudentId(null);
+    }
     if (newRole === 'student' && currentUser?.role !== 'student') {
       if (role !== 'student') facultyReturnRole.current = role;
       setPreviewStudent(createPreviewStudent());
@@ -1296,7 +1303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveStudentId(profile.id);
       setStudentPage('dashboard');
     } else if (profile.role === 'teacher') {
-      setActiveTeacherId(profile.id);
+      setActiveTeacherIdState(profile.id);
       setTeacherPage('dashboard');
     } else {
       setAdminPage('dashboard');
@@ -2584,7 +2591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const teacherWorkspace = role === 'teacher' && currentUser?.role === 'admin';
+  const teacherWorkspace = isProduction && role === 'teacher' && Boolean(currentUser);
   const visibleClasses = isFacultyPreviewingStudent ? [] : teacherWorkspace ? classes.filter(c => c.teacher_id === currentUser.id) : classes;
   const ownClassIds = new Set(visibleClasses.map(c => c.id));
   const visibleStudents = isFacultyPreviewingStudent ? [previewStudent] : teacherWorkspace ? students.filter(s => ownClassIds.has(s.class_id)) : students;

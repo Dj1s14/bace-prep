@@ -27,12 +27,12 @@ test('real provider isolates student preview and scopes admin teacher workspace 
  const states=[];let cursor=0;
  globalThis.__state=initial=>{const i=cursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;return [states[i],next=>{states[i]=typeof next==='function'?next(states[i]):next;}];};
  globalThis.__ref=initial=>globalThis.__state({current:initial})[0];
- const {AppProvider,useApp,AppContext}=await import('./src/context/AppContext');const {Header}=await import('./src/components/common/Header');let ctx;
+ const {AppProvider,useApp,AppContext}=await import('./src/context/AppContext');const {Header}=await import('./src/components/common/Header');const {TeacherSidebar}=await import('./src/components/common/TeacherSidebar');let ctx;
  const Capture=()=>{ctx=useApp();return null;};
  const render=()=>{cursor=0;renderToString(<AppProvider><Capture/></AppProvider>);return ctx;};
  render();
  const admin={id:'admin-own',email:'admin@example.edu',first_name:'Own',last_name:'Admin',role:'admin',created_at:'2026-01-01'};
- globalThis.__controls.setCurrentUser(admin);globalThis.__controls.setRoleState('admin');
+ globalThis.__controls.setCurrentUser(admin);globalThis.__controls.setRoleState('admin');globalThis.__controls.setTeachers([{id:'other-teacher',first_name:'Other',last_name:'Teacher',email:'other@example.edu'}]);globalThis.__controls.setActiveTeacherIdState('other-teacher');
  const realStudent={...ctx.currentStudent,profile:{...ctx.currentStudent.profile,id:'private-student',email:'private@example.edu',first_name:'Private',last_name:'Real'},class_id:'own-class'};
  globalThis.__controls.setStudents([realStudent,{...realStudent,profile:{...realStudent.profile,id:'other-student'},class_id:'other-class'}]);
  globalThis.__controls.setClasses([{id:'own-class',teacher_id:admin.id},{id:'other-class',teacher_id:'other-teacher'}]);
@@ -40,7 +40,7 @@ test('real provider isolates student preview and scopes admin teacher workspace 
  globalThis.__controls.setLessonGrades([{id:'private-grade',student_id:'private-student'}]);
  render();const before=JSON.stringify(globalThis.__snapshots);
  ctx.setRole('teacher');render();
- assert.equal(ctx.currentTeacher.id,admin.id);assert.deepEqual(ctx.classes.map(c=>c.id),['own-class']);assert.deepEqual(ctx.students.map(s=>s.profile.id),['private-student']);
+ assert.equal(ctx.currentTeacher.id,admin.id);assert.equal(ctx.activeTeacherId,admin.id);ctx.setActiveTeacherId('other-teacher');render();assert.equal(ctx.currentTeacher.id,admin.id);assert.deepEqual(ctx.classes.map(c=>c.id),['own-class']);assert.deepEqual(ctx.students.map(s=>s.profile.id),['private-student']);const teacherHtml=renderToString(<AppContext.Provider value={ctx}><TeacherSidebar isOpen={false} onClose={()=>{}} /></AppContext.Provider>);assert.ok(teacherHtml.includes(admin.email));assert.ok(!teacherHtml.includes('other@example.edu'));assert.ok(!teacherHtml.includes('openAccountModal'));
  ctx.setRole('student');render();
  assert.equal(ctx.currentUser.id,admin.id);assert.equal(ctx.currentUser.role,'admin');
  assert.equal(ctx.currentStudent.profile.id,'generic-student-preview');assert.equal(ctx.activeStudentId,'generic-student-preview');
@@ -56,15 +56,15 @@ test('real provider isolates student preview and scopes admin teacher workspace 
  assert.equal(storage.has('bace_bench_stats'),false);
  ctx.returnToFacultyConsole();render();assert.equal(ctx.role,'teacher');assert.equal(ctx.currentTeacher.id,admin.id);assert.equal(ctx.students[0].profile.id,'private-student');
  ctx.setRole('admin');render();ctx.setRole('student');render();ctx.returnToFacultyConsole();render();assert.equal(ctx.role,'admin');
- globalThis.__controls.setCurrentUser({...admin,role:'teacher'});globalThis.__controls.setRoleState('teacher');render();ctx.setRole('admin');render();assert.equal(ctx.role,'teacher');
- globalThis.__controls.setCurrentUser({...admin,role:'student'});globalThis.__controls.setRoleState('student');render();ctx.setRole('teacher');render();assert.equal(ctx.role,'student');
+ globalThis.__controls.setCurrentUser({...admin,role:'teacher'});globalThis.__controls.setRoleState('teacher');render();ctx.setRole('admin');render();assert.equal(ctx.role,'teacher');assert.deepEqual(ctx.classes.map(c=>c.id),['own-class']);assert.equal(ctx.currentTeacher.id,admin.id);
+ globalThis.__controls.setCurrentUser({...admin,role:'student'});globalThis.__controls.setRoleState('student');render();ctx.setRole('teacher');render();assert.equal(ctx.role,'student');assert.notEqual(ctx.currentTeacher.id,'other-teacher');globalThis.__controls.setCurrentUser(null);render();assert.notEqual(ctx.currentTeacher.id,'other-teacher');
  })().catch(e=>{console.error(e);process.exitCode=1;});
  `},bundle:true,platform:'node',format:'cjs',packages:'external',write:false,define:{'import.meta.env':'{}'},plugins:[{name:'controlled-provider-state',setup(builder){
  builder.onLoad({filter:/AppContext\.tsx$/},args=>{
  let s=readFileSync(args.path,'utf8').replace('useContext, useState, useEffect','useContext, useState as realUseState, useEffect');
  s+='\nconst useState: typeof realUseState = globalThis.__state;\nexport {AppContext};';
  s=s.replaceAll('React.useRef','globalThis.__ref');
- s=s.replace('  return (\n    <AppContext.Provider','  globalThis.__controls={setCurrentUser,setRoleState,setStudents,setClasses,setActivitySessions,setLessonGrades}; globalThis.__snapshots={students,classes,activitySessions,lessonGrades,assignmentProgress,studentCompletedLessonsMap};\n  return (\n    <AppContext.Provider');
+ s=s.replace('  return (\n    <AppContext.Provider','  globalThis.__controls={setCurrentUser,setRoleState,setStudents,setClasses,setActivitySessions,setLessonGrades,setTeachers,setActiveTeacherIdState}; globalThis.__snapshots={students,classes,activitySessions,lessonGrades,assignmentProgress,studentCompletedLessonsMap};\n  return (\n    <AppContext.Provider');
  return {contents:s,loader:'tsx'};
  });}}]});
  writeFileSync(output,result.outputFiles[0].contents);
