@@ -1,3 +1,5 @@
+import { StudentDirectoryFilters } from './StudentDirectoryFilters';
+import { DEFAULT_DIRECTORY_FILTERS, DirectoryFilters, directoryGroup, directoryGroupKey, filterStudentDirectory } from '../../lib/studentDirectory';
 import { FacultyRoleModal } from '../common/FacultyRoleModal';
 import React, { useState } from 'react';
 import {
@@ -67,6 +69,7 @@ export const AdminPortal: React.FC = () => {
   // Search & Filter States
   const [studentSearch, setStudentSearch] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState('all');
+  const [directoryFilters, setDirectoryFilters] = useState<DirectoryFilters>(DEFAULT_DIRECTORY_FILTERS);
   const [teacherSearch, setTeacherSearch] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
@@ -118,14 +121,10 @@ export const AdminPortal: React.FC = () => {
   };
 
   // Filtered Students
-  const filteredStudents = students.filter((s) => {
-    const fullName = `${s.profile.first_name} ${s.profile.last_name}`.toLowerCase();
-    const email = (s.profile.email || '').toLowerCase();
-    const matchesSearch =
-      fullName.includes(studentSearch.toLowerCase()) || email.includes(studentSearch.toLowerCase());
-    const matchesClass = studentClassFilter === 'all' || s.class_id === studentClassFilter;
-    return matchesSearch && matchesClass;
-  });
+  const filteredStudents = filterStudentDirectory(students, classes, teachers, studentSearch, studentClassFilter, directoryFilters);
+  // Keep bulk selection limited to the visible group when filters change.
+  React.useEffect(() => { setSelectedStudentIds([]); }, [studentSearch, studentClassFilter, directoryFilters.teacher, directoryFilters.period, directoryFilters.readiness, directoryFilters.activity]);
+  const visibleSelectedIds = selectedStudentIds.filter(id => filteredStudents.some(s => s.profile.id === id));
 
   // Filtered Teachers
   const filteredTeachers = teachers.filter((t) => {
@@ -585,9 +584,9 @@ export const AdminPortal: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Student Directory & Removal Control</h2>
+              <h2 className="text-lg font-bold text-slate-900">Student Directory</h2>
               <p className="text-xs text-slate-500">
-                View, filter, add, or permanently delete student accounts and performance records.
+                Find and group students by class, teacher, period, and preparation progress.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -623,11 +622,13 @@ export const AdminPortal: React.FC = () => {
               />
             </div>
             <select
+              aria-label="Filter students by class"
               value={studentClassFilter}
               onChange={(e) => setStudentClassFilter(e.target.value)}
               className="text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Classes ({classes.length})</option>
+              <option value="unassigned">No assigned class</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -635,6 +636,8 @@ export const AdminPortal: React.FC = () => {
               ))}
             </select>
           </div>
+
+          <StudentDirectoryFilters filters={directoryFilters} onChange={setDirectoryFilters} classes={classes} teachers={teachers} count={filteredStudents.length} total={students.length} selectedCount={visibleSelectedIds.length} onClearSelection={()=>setSelectedStudentIds([])} onReset={()=>{setStudentSearch('');setStudentClassFilter('all');setDirectoryFilters(DEFAULT_DIRECTORY_FILTERS);setSelectedStudentIds([]);}} />
 
           {/* Student Table */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -662,7 +665,8 @@ export const AdminPortal: React.FC = () => {
                       <th className="py-3 px-4 w-10">
                         <input
                           type="checkbox"
-                          checked={selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0}
+                          aria-label="Select all filtered students"
+                          checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedStudentIds.includes(s.profile.id))}
                           onChange={(e) => {
                             if (e.target.checked) {
                               setSelectedStudentIds(filteredStudents.map((s) => s.profile.id));
@@ -682,10 +686,15 @@ export const AdminPortal: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                    {filteredStudents.map((s) => {
+                    {filteredStudents.map((s, index) => {
                       const cls = classes.find((c) => c.id === s.class_id);
                       const isSelected = selectedStudentIds.includes(s.profile.id);
+                      const groupLabel = directoryGroup(s, directoryFilters.group, classes, teachers);
+                      const groupKey = directoryGroupKey(s, directoryFilters.group, classes);
+                      const beginsGroup = groupLabel && (index===0 || directoryGroupKey(filteredStudents[index-1], directoryFilters.group, classes)!==groupKey);
                       return (
+                        <React.Fragment key={s.profile.id}>
+                        {beginsGroup && <tr className="bg-blue-50"><th colSpan={7} scope="rowgroup" className="px-4 py-3 text-left font-bold text-blue-900">{groupLabel} <span className="font-normal">({filteredStudents.filter(student => directoryGroupKey(student,directoryFilters.group,classes)===groupKey).length} students)</span></th></tr>}
                         <tr
                           key={s.profile.id}
                           className={`hover:bg-slate-50/80 transition-colors ${
@@ -696,6 +705,7 @@ export const AdminPortal: React.FC = () => {
                             <input
                               type="checkbox"
                               checked={isSelected}
+                              aria-label={`Select ${s.profile.first_name} ${s.profile.last_name}`}
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   setSelectedStudentIds((prev) => [...prev, s.profile.id]);
@@ -720,7 +730,7 @@ export const AdminPortal: React.FC = () => {
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            <span className="font-medium text-slate-800">{cls?.name || 'General Cohort'}</span>
+                            <span className="font-medium text-slate-800">{cls?.name || 'No assigned class'}</span>
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center space-x-2">
@@ -780,6 +790,7 @@ export const AdminPortal: React.FC = () => {
                             </div>
                           </td>
                         </tr>
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
