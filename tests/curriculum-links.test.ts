@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { INITIAL_LESSONS, INITIAL_TOPICS, INITIAL_QUESTIONS } from '../src/data/initialData';
+import { REVIEW_QUESTIONS } from '../src/data/reviewPacketLessons';
 import { EXPANDED_LESSONS, EXPANDED_QUESTIONS } from '../src/data/expandedLearning';
 
 test('new curriculum is reachable through domain, topic, lesson, and assessment registries', () => {
@@ -37,6 +38,6 @@ test('active question bank has unique prompts, valid lesson links and consistent
   assert.ok(['Easy','Medium','Hard'].includes(q.difficulty));
  }
  // Archived repeated IDs remain available to an already-saved exam.
- assert.equal(INITIAL_QUESTIONS.length,972);
+ assert.equal(INITIAL_QUESTIONS.length,972 + REVIEW_QUESTIONS.length);
  for(const d of ['d1','d2','d3','d4','d5','d6','d7','d8']) assert.ok(active.filter(q=>q.domain_id===d).length>=10);
 });

@@ -1,3 +1,4 @@
+import { REVIEW_LESSONS, enrichFromReview } from './reviewPacketLessons';
 import { EXPANDED_LESSONS } from './expandedLearning';
 import { deepenLesson } from './lessonDeepening';
 import { Lesson } from '../types/database';
@@ -903,4 +904,5 @@ export const ALL_LESSONS: Lesson[] = [
   },
   ...COVERAGE_EXPANSION_LESSONS,
   ...EXPANDED_LESSONS,
-].map(deepenLesson);
+  ...REVIEW_LESSONS,
+].map(deepenLesson).map(enrichFromReview);

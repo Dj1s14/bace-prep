@@ -1,3 +1,4 @@
+import { REVIEW_QUESTIONS } from '../reviewPacketLessons';
 import { ALL_LESSONS } from '../allLessons';
 import { normalizeQuestionBank } from '../questionNormalization';
 import { EXPANDED_QUESTIONS } from '../expandedLearning';
@@ -28,6 +29,7 @@ import { COVERAGE_EXPANSION_QUESTIONS } from './coverage_expansion';
 
 const RAW_QUESTIONS: Question[] = [
   ...EXPANDED_QUESTIONS,
+  ...REVIEW_QUESTIONS,
   ...LESSON_PIPETTE_QUESTIONS,
   ...LESSON_DILUTIONS_QUESTIONS,
   ...LESSON_ASEPTIC_QUESTIONS,
