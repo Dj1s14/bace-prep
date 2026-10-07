@@ -196,9 +196,15 @@ export interface Question {
   created_at?: string;
 }
 
+export interface CompletedQuestionReview {
+  question: Question;
+  selected_choice_id: string | null;
+}
+
 export interface QuizAttempt {
   id: string;
   student_id: string;
+  review_questions?: CompletedQuestionReview[] | null;
   quiz_type: 'practice' | 'practice_drill' | 'mock_quick' | 'mock_half' | 'mock_full' | 'lesson_check';
   domain_id?: string;
   score: number;

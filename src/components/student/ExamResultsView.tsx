@@ -1,3 +1,5 @@
+import { testTitle } from '../../lib/completedTests';
+import { TestAnswerReview } from './CompletedTests';
 import React from 'react';
 import {
   Award,
@@ -102,10 +104,10 @@ export const ExamResultsView: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Exam Submission Complete
+              Test Submission Complete
             </span>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Mock Exam Performance Analysis
+              {testTitle(attempt)} Performance Analysis
             </h1>
             <p className="text-sm text-slate-600">
               Based on the 80% Biotility BACE benchmark credentialing standard.
@@ -150,6 +152,9 @@ export const ExamResultsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <TestAnswerReview key={attempt.id} attempt={attempt} />
+      <button onClick={() => setStudentPage('progress')} className="text-sm font-semibold text-blue-700 hover:underline">View all completed tests</button>
 
       {/* Strongest & Weakest Callouts */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

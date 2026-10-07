@@ -1,3 +1,4 @@
+import { captureTestReview } from '../../lib/completedTests';
 import { readExamDraft, examDraftKey, remainingSeconds } from '../../lib/examDraft';
 import { recordExamReviews } from '../../lib/studyReviews';
 import React, { useState, useEffect, useRef } from 'react';
@@ -205,6 +206,7 @@ export const MockExamRunner: React.FC = () => {
       completed_at: new Date().toISOString(),
       time_spent_seconds: Math.min(initialSeconds, Math.max(0, Math.round((Date.now()-Date.parse(startedAt))/1000))),
       domain_breakdown: domainBreakdown,
+      review_questions: captureTestReview(examQuestions, selectedChoices),
     };
 
     try {

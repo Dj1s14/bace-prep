@@ -123,6 +123,7 @@ export async function cloudInsertQuizAttempt(client: SupabaseClient, row: QuizAt
     percentage: row.percentage,
     time_spent_seconds: row.time_spent_seconds || 0,
     domain_breakdown: row.domain_breakdown || null,
+    review_questions: row.review_questions || null,
     started_at: row.started_at || null,
     completed_at: row.completed_at || new Date().toISOString(),
   };

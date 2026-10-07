@@ -1,3 +1,4 @@
+import { captureTestReview } from '../../lib/completedTests';
 import { LessonVisual } from './LessonVisual';
 import React, { useState, useMemo } from 'react';
 import {
@@ -186,6 +187,7 @@ export const LessonView: React.FC = () => {
     setStudentPage,
     recordLessonCompletion,
     recordLessonGrade,
+    recordExamSubmission,
     currentStudent,
     activeStudentId,
     completedLessonIds,
@@ -252,6 +254,7 @@ export const LessonView: React.FC = () => {
   }, [allLessonQuestions.length]);
 
   React.useEffect(() => {
+    lessonCheckStartedAt.current = new Date().toISOString();
     setDrillSize(Math.min(5, Math.max(1, allLessonQuestions.length)));
     setDifficultyFilter('all');
     setBrowseSearch('');
@@ -305,6 +308,7 @@ export const LessonView: React.FC = () => {
   );
 
   // State for Check Your Understanding answers
+  const lessonCheckStartedAt = React.useRef(new Date().toISOString());
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, boolean>>({});
   const [lessonFinished, setLessonFinished] = useState(false);
@@ -334,6 +338,13 @@ export const LessonView: React.FC = () => {
         }
       });
       const percent = Math.round((finalCorrect / checkQuestions.length) * 100);
+      void recordExamSubmission({
+        id:`lesson_check_${crypto.randomUUID()}`,student_id:currentStudent.profile.id,quiz_type:'lesson_check',domain_id:lesson.domain_id,
+        score:finalCorrect,total_questions:checkQuestions.length,percentage:percent,
+        started_at:lessonCheckStartedAt.current,completed_at:new Date().toISOString(),
+        time_spent_seconds:Math.max(0,Math.round((Date.now()-Date.parse(lessonCheckStartedAt.current))/1000)),
+        review_questions:captureTestReview(checkQuestions,selectedAnswers),
+      }, {navigate:false}).catch(console.error);
       recordLessonGrade({
         lesson_id: lesson.id,
         student_id: activeStudentId || currentStudent.profile.id || 'stu_alex',
@@ -351,6 +362,7 @@ export const LessonView: React.FC = () => {
   };
 
   const handleShuffle = () => {
+    lessonCheckStartedAt.current = new Date().toISOString();
     setSeed((s) => s + 1);
     setSelectedAnswers({});
     setSubmittedAnswers({});
@@ -358,6 +370,7 @@ export const LessonView: React.FC = () => {
   };
 
   const handleResetQuiz = () => {
+    lessonCheckStartedAt.current = new Date().toISOString();
     setSelectedAnswers({});
     setSubmittedAnswers({});
     setLessonFinished(false);

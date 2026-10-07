@@ -1,3 +1,4 @@
+import { captureTestReview } from '../../lib/completedTests';
 import { recordAnswerReview } from '../../lib/studyReviews';
 import { AnswerExplanations } from './AnswerExplanations';
 import React, { useState } from 'react';
@@ -59,7 +60,7 @@ export const PracticeView: React.FC = () => {
       entry.total++; if (question.choices.some(c => c.is_correct && c.id === activeSession.selectedChoices[question.id])) entry.correct++;
       entry.percentage = Math.round(entry.correct / entry.total * 100);
     }
-    void recordExamSubmission({ id: `practice_${crypto.randomUUID()}`, student_id: currentStudent.profile.id, quiz_type: 'practice_drill', score: activeSession.score, total_questions: activeSession.questions.length, percentage: Math.round(activeSession.score / Math.max(1,activeSession.questions.length)*100), started_at: practiceStartedAt.current, completed_at: new Date().toISOString(), time_spent_seconds: Math.round((Date.now()-Date.parse(practiceStartedAt.current))/1000), domain_breakdown: breakdown }).catch(console.error);
+    void recordExamSubmission({ id: `practice_${crypto.randomUUID()}`, student_id: currentStudent.profile.id, quiz_type: 'practice_drill', score: activeSession.score, total_questions: activeSession.questions.length, percentage: Math.round(activeSession.score / Math.max(1,activeSession.questions.length)*100), started_at: practiceStartedAt.current, completed_at: new Date().toISOString(), time_spent_seconds: Math.round((Date.now()-Date.parse(practiceStartedAt.current))/1000), domain_breakdown: breakdown, review_questions: captureTestReview(activeSession.questions, activeSession.selectedChoices) }).catch(console.error);
   }, [activeSession?.isFinished]);
 
   // Quick preset starters

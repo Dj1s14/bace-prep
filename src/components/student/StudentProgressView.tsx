@@ -1,3 +1,4 @@
+import { CompletedTests } from './CompletedTests';
 import React, { useState } from 'react';
 import {
   TrendingUp,
@@ -205,6 +206,8 @@ export const StudentProgressView: React.FC = () => {
           <div className="text-[11px] text-slate-500">Consecutive days</div>
         </div>
       </div>
+
+      <CompletedTests />
 
       {/* Visual Navigation Bar */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-3">

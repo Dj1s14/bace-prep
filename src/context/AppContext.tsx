@@ -261,6 +261,7 @@ interface AppContextType {
   workspaceError: string;
   refreshWorkspace: () => Promise<void>;
   overallReadiness: number;
+  completedTests: QuizAttempt[];
   lastExamAttempt: QuizAttempt | null;
   setLastExamAttempt: React.Dispatch<React.SetStateAction<QuizAttempt | null>>;
   activeExamConfig: {
@@ -294,7 +295,7 @@ interface AppContextType {
   recordLessonCompletion: (lessonId: string, studentId?: string) => void;
   recordLessonGrade: (gradeData: Omit<LessonGradeRecord, 'id' | 'submitted_at'>) => void;
   updateLessonGrade: (id: string, updates: Partial<LessonGradeRecord>) => void;
-  recordExamSubmission: (attempt: QuizAttempt) => Promise<void>;
+  recordExamSubmission: (attempt: QuizAttempt, options?: { navigate?: boolean }) => Promise<void>;
   deleteActivitySession: (sessionId: string) => void;
   updateDomainMastery: (domainId: string, newScore: number) => void;
 
@@ -974,6 +975,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const overallReadiness = currentStudent.overall_readiness;
   const [lastExamAttempt, setLastExamAttempt] = useState<QuizAttempt | null>(null);
+  const [completedTests, setCompletedTests] = useState<QuizAttempt[]>([]);
+  const [previewTests, setPreviewTests] = useState<QuizAttempt[]>([]);
+  // Never show a previous login's result after an account/environment change.
+  useEffect(() => { setLastExamAttempt(null); setCompletedTests([]); setPreviewTests([]); }, [currentUser?.id, environment]);
 
   // Active mock exam configuration
   const [activeExamConfig, setActiveExamConfig] = useState<{
@@ -1051,7 +1056,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (newRole === 'student' && currentUser?.role !== 'student') {
       if (role !== 'student') facultyReturnRole.current = role;
       setPreviewStudent(createPreviewStudent());
-      setPreviewCompletedLessons([]); setPreviewGrades([]); setPreviewSessions([]); setPreviewBenchStats(emptyBenchStats()); setLastExamAttempt(null);
+      setPreviewCompletedLessons([]); setPreviewGrades([]); setPreviewSessions([]); setPreviewTests([]); setPreviewBenchStats(emptyBenchStats()); setLastExamAttempt(null);
     }
     setRoleState(newRole);
     if (newRole === 'student') {
@@ -1126,6 +1131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAssignments(workspace.assignments);
       setLessonGrades(workspace.lessonGrades);
       setActivitySessions(workspace.activitySessions);
+      setCompletedTests(workspace.quizAttempts);
       setAssignmentProgress(workspace.assignmentProgress);
 
       const completedMap: Record<string, string[]> = {};
@@ -1903,15 +1909,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const recordExamSubmission = async (attempt: QuizAttempt) => {
+  const recordExamSubmission = async (attempt: QuizAttempt, options: { navigate?: boolean } = {}) => {
     if (isFacultyPreviewingStudent) {
       setPreviewStudent(prev => {
         const total=prev.questions_attempted+attempt.total_questions;
         return {...prev, questions_attempted:total, accuracy:Math.round((Math.round(prev.questions_attempted*prev.accuracy/100)+attempt.score)/Math.max(1,total)*100), mock_exam_scores:attempt.quiz_type.startsWith('mock')?[...prev.mock_exam_scores,attempt.percentage]:prev.mock_exam_scores};
       });
-      setPreviewSessions(prev => [...prev,{id:`preview_${attempt.id}`,student_id:PREVIEW_STUDENT_ID,date:new Date().toISOString().slice(0,10),formattedDate:'Preview',label:'Preview assessment',sessionNumber:prev.length+1,type:attempt.quiz_type.startsWith('mock')?'Mock Exam':'Practice Drill',score:attempt.score,totalQuestions:attempt.total_questions,accuracy:attempt.percentage,timeSpentMinutes:Math.round(attempt.time_spent_seconds/60)}]);
+      setPreviewSessions(prev => [...prev,{id:`preview_${attempt.id}`,student_id:PREVIEW_STUDENT_ID,date:new Date().toISOString().slice(0,10),formattedDate:'Preview',label:'Preview assessment',sessionNumber:prev.length+1,type:attempt.quiz_type==='lesson_check'?'Lesson Check':attempt.quiz_type.startsWith('mock')?'Mock Exam':'Practice Drill',score:attempt.score,totalQuestions:attempt.total_questions,accuracy:attempt.percentage,timeSpentMinutes:Math.round(attempt.time_spent_seconds/60)}]);
+      setPreviewTests(prev => [{...attempt,student_id:PREVIEW_STUDENT_ID}, ...prev.filter(a => a.id !== attempt.id)]);
       setLastExamAttempt({...attempt,student_id:PREVIEW_STUDENT_ID});
-      setStudentPage('exam_results');
+      if (options.navigate !== false) setStudentPage('exam_results');
       return;
     }
 
@@ -1925,8 +1932,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sessionNumber: activitySessions.length + 1,
       label: attempt.quiz_type.startsWith('mock')
         ? `Session ${activitySessions.length + 1}: ${attempt.quiz_type === 'mock_full' ? 'Full Mock Exam' : 'Targeted Mock'}`
-        : `Session ${activitySessions.length + 1}: Practice Drill`,
-      type: attempt.quiz_type.startsWith('mock') ? 'Mock Exam' : 'Practice Drill',
+        : `Session ${activitySessions.length + 1}: ${attempt.quiz_type === 'lesson_check' ? 'Lesson Check' : 'Practice Drill'}`,
+      type: attempt.quiz_type === 'lesson_check' ? 'Lesson Check' : attempt.quiz_type.startsWith('mock') ? 'Mock Exam' : 'Practice Drill',
       domainId: attempt.domain_id,
       domainName: attempt.domain_id ? domains.find((d) => d.id === attempt.domain_id)?.name : undefined,
       score: attempt.score,
@@ -1940,7 +1947,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!sb) throw new Error('Sign in before saving this assessment.');
       await Promise.all([cloudInsertQuizAttempt(sb, { ...attempt, student_id: targetStudentId }), cloudInsertActivitySession(sb, newSession)]);
     }
-    setLastExamAttempt(attempt);
+    setCompletedTests(prev => [{...attempt, student_id:targetStudentId}, ...prev.filter(a => a.id !== attempt.id)]);
+    setLastExamAttempt({...attempt, student_id:targetStudentId});
     setActivitySessions((prev) => [...prev.filter(item => item.id !== newSession.id), newSession]);
 
     setStudents((prev) =>
@@ -2000,7 +2008,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    setStudentPage('exam_results');
+    if (options.navigate !== false) setStudentPage('exam_results');
   };
 
   const deleteActivitySession = (sessionId: string) => {
@@ -2669,7 +2677,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         workspaceError,
         refreshWorkspace: async () => { if (currentUser && !(await refreshCloudWorkspace(currentUser))) throw new Error('Shared classroom data could not refresh. Try again when connected.'); },
         overallReadiness,
-        lastExamAttempt,
+        completedTests: isFacultyPreviewingStudent ? previewTests : completedTests.filter(a => a.student_id === currentStudent.profile.id),
+        lastExamAttempt: lastExamAttempt?.student_id === currentStudent.profile.id ? lastExamAttempt : null,
         setLastExamAttempt,
         activeExamConfig,
         setActiveExamConfig,
