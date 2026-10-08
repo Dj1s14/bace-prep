@@ -1,6 +1,6 @@
 import { PasswordRecovery } from './components/auth/PasswordRecovery';
 import { SaveStatus } from './components/common/SaveStatus';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { StudentSidebar } from './components/common/StudentSidebar';
@@ -47,6 +47,7 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
     studentPage,
     teacherPage,
     selectedLessonId,
+    selectedDomainId,
   } = useApp();
 
   // Strict RBAC Enforcement:
@@ -112,11 +113,18 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
 
   const mainScrollRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (currentRole === 'student' && studentPage === 'lesson') {
-      mainScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    }
-  }, [currentRole, studentPage, selectedLessonId]);
+  useLayoutEffect(() => {
+    if (currentRole !== 'student') return;
+    const reset = () => {
+      const main = mainScrollRef.current;
+      if (main) { main.scrollTop = 0; main.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    };
+    reset();
+    // Run once after child effects so content/focus changes cannot retain the old position.
+    const frame = requestAnimationFrame(reset);
+    return () => cancelAnimationFrame(frame);
+  }, [currentRole, studentPage, selectedDomainId, selectedLessonId]);
 
   // When taking a mock exam, give full focus without distracting sidebar
   const isTakingExam = currentRole === 'student' && studentPage === 'mock_exam_runner';

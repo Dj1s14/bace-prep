@@ -160,11 +160,11 @@ export const DomainMasteryChart: React.FC = () => {
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 rounded-full bg-blue-600" />
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-              BACE Domain Mastery Levels
+              BACE Lesson Mastery Levels
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-            Diagnostic comparison of all 8 exam domains measured against the official 80% BACE Ready threshold.
+            Mastery is earned through completed lessons and their latest assessment scores. Unfinished lessons earn no credit; mock exams do not raise mastery.
           </p>
         </div>
 
@@ -318,7 +318,7 @@ export const DomainMasteryChart: React.FC = () => {
               <PolarAngleAxis dataKey="shortName" stroke="#475569" fontSize={11} />
               <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#94a3b8" fontSize={10} />
               <Radar
-                name="Domain Mastery"
+                name="Lesson Mastery"
                 dataKey="score"
                 stroke="#2563eb"
                 fill="#3b82f6"

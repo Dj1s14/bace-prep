@@ -49,8 +49,9 @@ test('real provider isolates student preview and scopes admin teacher workspace 
  ctx.recordLessonGrade({student_id:'private-student',student_name:'Private Real',lesson_id:'l1',score:1,total_questions:1,percentage:100});
  ctx.updateDomainMastery('d1',90);ctx.deleteActivitySession('private-session');ctx.updateLessonGrade('private-grade',{score:0});
  ctx.recordBenchActivity('pipette',1,1);ctx.markBenchLessonComplete('pipette_intro');
+ const masteryBeforeMock=JSON.stringify(ctx.currentStudent.domain_mastery);
  await ctx.recordExamSubmission({id:'preview-attempt',student_id:'private-student',quiz_type:'mock_quick',score:1,total_questions:1,percentage:100,time_spent_seconds:60});
- render();assert.equal(JSON.stringify(globalThis.__snapshots),before,'Preview must not change underlying real classroom data');
+ render();assert.equal(JSON.stringify(ctx.currentStudent.domain_mastery),masteryBeforeMock,'Mock exams must not award lesson mastery');assert.deepEqual(ctx.currentStudent.mock_exam_scores,[100]);assert.equal(JSON.stringify(globalThis.__snapshots),before,'Preview must not change underlying real classroom data');
  assert.equal(ctx.lessonGrades[0].student_id,'generic-student-preview');assert.equal(ctx.activitySessions[0].student_id,'generic-student-preview');
  assert.equal(ctx.currentStudent.questions_attempted,1);assert.deepEqual(ctx.completedLessonIds,['l1']);assert.equal(ctx.benchStats.pipetteDrillsCompleted,1);
  assert.equal(storage.has('bace_bench_stats'),false);

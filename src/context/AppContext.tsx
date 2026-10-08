@@ -1,3 +1,4 @@
+import { lessonMastery } from '../lib/lessonMastery';
 import { canOpenPortal, createPreviewStudent, PREVIEW_STUDENT_ID, resolveTeacherIdentity } from '../lib/portalAccess';
 import { normalizeQuestionBank } from '../data/questionNormalization';
 import { facultyDirectory } from '../lib/accountProvisioning';
@@ -931,12 +932,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser, environment]);
 
+  const masteryStudents = React.useMemo(() => students.map(student =>
+    lessonMastery(student,studentCompletedLessonsMap[student.profile.id] || [],lessonGrades,lessons,domains)
+  ), [students,studentCompletedLessonsMap,lessonGrades,lessons,domains]);
+  const lessonPreviewStudent = React.useMemo(() => lessonMastery(previewStudent,previewCompletedLessons,previewGrades,lessons,domains), [previewStudent,previewCompletedLessons,previewGrades,lessons,domains]);
+
   // Faculty preview never resolves an enrolled student.
   // Active student resolver
   const currentStudent: StudentOverview = React.useMemo(() => {
-    if (currentUser && currentUser.role !== 'student') return {...previewStudent, lessons_completed:previewCompletedLessons.length};
+    if (currentUser && currentUser.role !== 'student') return lessonPreviewStudent;
     if (currentUser && currentUser.role === 'student') {
-      const match = students.find(
+      const match = masteryStudents.find(
         (s) => s.profile.id === currentUser.id || s.profile.email.toLowerCase() === currentUser.email.toLowerCase()
       );
       if (match) return match;
@@ -947,12 +953,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
     if (activeStudentId) {
-      const found = students.find((s) => s.profile.id === activeStudentId);
+      const found = masteryStudents.find((s) => s.profile.id === activeStudentId);
       if (found) return found;
     }
-    if (students.length > 0) return students[0];
+    if (masteryStudents.length > 0) return masteryStudents[0];
     return DEFAULT_EMPTY_STUDENT;
-  }, [currentUser, activeStudentId, students, classes, previewStudent, previewCompletedLessons]);
+  }, [currentUser, activeStudentId, masteryStudents, classes, lessonPreviewStudent]);
 
   // Active teacher resolver
   const currentTeacher: TeacherProfile = React.useMemo(() => {
@@ -1151,38 +1157,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const totalCorrect = attempts.reduce((sum, attempt) => sum + (attempt.score || 0), 0);
         const accuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
 
-        const masteryTotals: Record<string, { weighted: number; weight: number }> = {};
-        attempts.forEach((attempt) => {
-          if (attempt.domain_breakdown) {
-            Object.entries(attempt.domain_breakdown).forEach(([domainId, stats]: [string, any]) => {
-              const q = Number(stats?.total || stats?.total_questions || 1);
-              const pct = Number(stats?.percentage || 0);
-              const current = masteryTotals[domainId] || { weighted: 0, weight: 0 };
-              current.weighted += pct * q;
-              current.weight += q;
-              masteryTotals[domainId] = current;
-            });
-          } else if (attempt.domain_id) {
-            const q = Number(attempt.total_questions || 1);
-            const current = masteryTotals[attempt.domain_id] || { weighted: 0, weight: 0 };
-            current.weighted += Number(attempt.percentage || 0) * q;
-            current.weight += q;
-            masteryTotals[attempt.domain_id] = current;
-          }
-        });
-
-        const domainMastery: Record<string, number> = {};
-        domains.forEach((domain) => {
-          const stat = masteryTotals[domain.id];
-          domainMastery[domain.id] = stat?.weight ? Math.round(stat.weighted / stat.weight) : 0;
-        });
-
-        const readiness = Math.round(
-          domains.reduce(
-            (sum, domain) => sum + (domainMastery[domain.id] || 0) * (domain.exam_weight / 100),
-            0
-          )
-        );
+        const earned = lessonMastery({...DEFAULT_EMPTY_STUDENT,profile:studentProfile},completedLessons,workspace.lessonGrades,lessons,domains);
+        const domainMastery = earned.domain_mastery;
+        const readiness = earned.overall_readiness;
 
         return {
           profile: studentProfile,
@@ -1961,27 +1938,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? [...s.mock_exam_scores, attempt.percentage]
             : s.mock_exam_scores;
 
-          const updatedMastery = { ...s.domain_mastery };
-          if (attempt.domain_breakdown) {
-            Object.entries(attempt.domain_breakdown).forEach(([dId, stats]) => {
-              const prevDomainScore = updatedMastery[dId] ?? 0;
-              updatedMastery[dId] = prevDomainScore > 0
-                ? Math.min(100, Math.max(0, Math.round(prevDomainScore * 0.7 + stats.percentage * 0.3)))
-                : stats.percentage;
-            });
-          } else if (attempt.domain_id) {
-            const prevDomainScore = updatedMastery[attempt.domain_id] ?? 0;
-            updatedMastery[attempt.domain_id] = prevDomainScore > 0
-              ? Math.min(100, Math.max(0, Math.round(prevDomainScore * 0.7 + attempt.percentage * 0.3)))
-              : attempt.percentage;
-          }
-
-          let totalScore = 0;
-          domains.forEach((d) => {
-            const val = updatedMastery[d.id] ?? 0;
-            totalScore += val * (d.exam_weight / 100);
-          });
-          const newReadiness = Math.round(totalScore);
+          const earned = lessonMastery(s,studentCompletedLessonsMap[targetStudentId] || [],lessonGrades,lessons,domains);
+          const updatedMastery = earned.domain_mastery;
+          const newReadiness = earned.overall_readiness;
 
           return {
             ...s,
@@ -2602,7 +2561,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const teacherWorkspace = isProduction && role === 'teacher' && Boolean(currentUser);
   const visibleClasses = isFacultyPreviewingStudent ? [] : teacherWorkspace ? classes.filter(c => c.teacher_id === currentUser.id) : classes;
   const ownClassIds = new Set(visibleClasses.map(c => c.id));
-  const visibleStudents = isFacultyPreviewingStudent ? [previewStudent] : teacherWorkspace ? students.filter(s => ownClassIds.has(s.class_id)) : students;
+  const visibleStudents = isFacultyPreviewingStudent ? [lessonPreviewStudent] : teacherWorkspace ? masteryStudents.filter(s => ownClassIds.has(s.class_id)) : masteryStudents;
   const ownStudentIds = new Set(visibleStudents.map(s => s.profile.id));
 
   return (

@@ -61,7 +61,7 @@ export const ExamResultsView: React.FC = () => {
 
   const attempt = lastExamAttempt;
   const isBaceReady = attempt.percentage >= 80;
-  const statusLabel = isBaceReady ? 'BACE Ready' : 'Needs Additional Review';
+  const statusLabel = isBaceReady ? 'Test Benchmark Met' : 'Needs Additional Review';
 
   // Sort domains by percentage to find strongest and weakest
   const domainPerformanceList = domains.map((d) => {
@@ -110,7 +110,7 @@ export const ExamResultsView: React.FC = () => {
               {testTitle(attempt)} Performance Analysis
             </h1>
             <p className="text-sm text-slate-600">
-              Based on the 80% Biotility BACE benchmark credentialing standard.
+              Based on the 80% Biotility BACE benchmark credentialing standard. Test scores do not complete lessons or raise lesson mastery.
             </p>
           </div>
 
