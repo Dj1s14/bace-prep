@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { StudentLearningProfile } from './StudentLearningProfile';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -59,6 +60,12 @@ export const TeacherStudentsView: React.FC = () => {
   });
 
   const activeStudent = students.find((s) => s.profile.id === selectedStudentId);
+  useEffect(() => {
+    if (!activeStudent) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelectedStudentId(null); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [activeStudent?.profile.id, setSelectedStudentId]);
 
   return (
     <div className="space-y-8 pb-16">
@@ -176,7 +183,7 @@ export const TeacherStudentsView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredStudents.map((stu) => {
                 const assignedClass = classes.find((c) => c.id === stu.class_id);
-                const weakest = stu.weakest_topics[0]?.name || 'Applied Math';
+                const weakest = stu.weakest_topics[0]?.name || 'Not assessed';
 
                 return (
                   <tr
@@ -200,7 +207,7 @@ export const TeacherStudentsView: React.FC = () => {
                     </td>
 
                     <td className="p-3.5 text-slate-700 font-medium">
-                      {assignedClass?.period || 'Period 2'}
+                      {assignedClass?.period || 'Unassigned'}
                     </td>
 
                     <td className="p-3.5 font-extrabold text-slate-900 text-sm">
@@ -234,7 +241,7 @@ export const TeacherStudentsView: React.FC = () => {
                           }}
                           className="inline-flex items-center space-x-1 text-xs font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors"
                         >
-                          <span>View Domain Mastery</span>
+                          <span>View Student Profile</span>
                           <ChevronRight className="w-3 h-3" />
                         </button>
                         <button
@@ -294,7 +301,7 @@ export const TeacherStudentsView: React.FC = () => {
       {/* Individual Student Progress & Domain Mastery Modal / Drawer */}
       {activeStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-200 space-y-6 max-h-[90vh] overflow-y-auto">
+          <div role="dialog" aria-modal="true" aria-label="Student profile" className="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full shadow-2xl border border-slate-200 space-y-6 max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center space-x-3">
@@ -314,6 +321,7 @@ export const TeacherStudentsView: React.FC = () => {
 
               <button
                 onClick={() => setSelectedStudentId(null)}
+                aria-label="Close student profile"
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
@@ -355,6 +363,8 @@ export const TeacherStudentsView: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <StudentLearningProfile key={activeStudent.profile.id} student={activeStudent} />
 
             {/* Domain Mastery Breakdown for This Student */}
             <div className="space-y-4">

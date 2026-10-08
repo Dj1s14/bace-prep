@@ -53,7 +53,7 @@ test('real provider isolates student preview and scopes admin teacher workspace 
  await ctx.recordExamSubmission({id:'preview-attempt',student_id:'private-student',quiz_type:'mock_quick',score:1,total_questions:1,percentage:100,time_spent_seconds:60});
  render();assert.equal(JSON.stringify(ctx.currentStudent.domain_mastery),masteryBeforeMock,'Mock exams must not award lesson mastery');assert.deepEqual(ctx.currentStudent.mock_exam_scores,[100]);assert.equal(JSON.stringify(globalThis.__snapshots),before,'Preview must not change underlying real classroom data');
  assert.equal(ctx.lessonGrades[0].student_id,'generic-student-preview');assert.equal(ctx.activitySessions[0].student_id,'generic-student-preview');
- assert.equal(ctx.currentStudent.questions_attempted,1);assert.deepEqual(ctx.completedLessonIds,['l1']);assert.equal(ctx.benchStats.pipetteDrillsCompleted,1);
+ assert.deepEqual(Object.keys(ctx.studentLessonCompletions),['generic-student-preview']);assert.equal(ctx.studentTestHistory[0].student_id,'generic-student-preview');assert.equal(ctx.currentStudent.questions_attempted,1);assert.deepEqual(ctx.completedLessonIds,['l1']);assert.equal(ctx.benchStats.pipetteDrillsCompleted,1);
  assert.equal(storage.has('bace_bench_stats'),false);
  ctx.returnToFacultyConsole();render();assert.equal(ctx.role,'teacher');assert.equal(ctx.currentTeacher.id,admin.id);assert.equal(ctx.students[0].profile.id,'private-student');
  ctx.setRole('admin');render();ctx.setRole('student');render();ctx.returnToFacultyConsole();render();assert.equal(ctx.role,'admin');

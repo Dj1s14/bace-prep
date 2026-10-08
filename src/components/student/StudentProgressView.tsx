@@ -1,3 +1,4 @@
+import { LessonRewards } from './LessonRewards';
 import { CompletedTests } from './CompletedTests';
 import React, { useState } from 'react';
 import {
@@ -207,6 +208,7 @@ export const StudentProgressView: React.FC = () => {
         </div>
       </div>
 
+      <LessonRewards />
       <CompletedTests />
 
       {/* Visual Navigation Bar */}

@@ -200,6 +200,8 @@ interface AppContextType {
   assignments: Assignment[];
   assignmentProgress: AssignmentProgress[];
   completedLessonIds: string[];
+  studentLessonCompletions: Record<string, string[]>;
+  studentTestHistory: QuizAttempt[];
   activitySessions: StudentActivitySession[];
   lessonGrades: LessonGradeRecord[];
 
@@ -2611,6 +2613,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         achievements,
         classes: visibleClasses,
         students: visibleStudents,
+        studentLessonCompletions: Object.fromEntries(visibleStudents.filter(s => role !== 'student' || s.profile.id === currentStudent.profile.id).map(s => [s.profile.id, isFacultyPreviewingStudent ? previewCompletedLessons : studentCompletedLessonsMap[s.profile.id] || []])),
+        studentTestHistory: isFacultyPreviewingStudent ? previewTests : completedTests.filter(a => role === 'student' ? a.student_id === currentStudent.profile.id : ownStudentIds.has(a.student_id)),
         teachers: isFacultyPreviewingStudent ? [] : teachers,
         assignments: isFacultyPreviewingStudent ? [] : teacherWorkspace ? assignments.filter(a => ownClassIds.has(a.class_id)) : assignments,
         assignmentProgress: isFacultyPreviewingStudent ? [] : teacherWorkspace ? assignmentProgress.filter(p => ownStudentIds.has(p.student_id)) : assignmentProgress,

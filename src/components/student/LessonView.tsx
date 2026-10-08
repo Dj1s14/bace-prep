@@ -1,3 +1,4 @@
+import { LessonRewards } from './LessonRewards';
 import { captureTestReview } from '../../lib/completedTests';
 import { LessonVisual } from './LessonVisual';
 import React, { useState, useMemo } from 'react';
@@ -405,6 +406,7 @@ export const LessonView: React.FC = () => {
 
   return (
     <div ref={lessonRootRef} className="lesson-page space-y-7 pb-16 max-w-4xl mx-auto">
+      <LessonRewards />
       {/* Top Breadcrumb & Return button */}
       <div className="flex items-center justify-between">
         <button
