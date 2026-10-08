@@ -28,6 +28,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     googleUser,
     openAuthModal,
     setRole,
+    currentUser,
   } = useApp();
 
   const navItems: Array<{
@@ -37,10 +38,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     badge?: string;
   }> = [
     { id: 'dashboard', label: 'Admin Overview', icon: LayoutDashboard },
-    { id: 'students', label: 'Student Directory & Removal', icon: Users, badge: `${students.length}` },
-    { id: 'teachers', label: 'Teacher Management & Removal', icon: Briefcase, badge: `${teachers.length}` },
-    { id: 'classes', label: 'Classes & Cohorts', icon: School, badge: `${classes.length}` },
-    { id: 'system', label: 'Supabase & Database Sync', icon: Database },
+    { id: 'students', label: 'Students', icon: Users, badge: `${students.length}` },
+    { id: 'teachers', label: 'Teachers & Admins', icon: Briefcase, badge: `${teachers.length}` },
+    { id: 'classes', label: 'Classes', icon: School, badge: `${classes.length}` },
+    { id: 'system', label: 'System Settings', icon: Database },
   ];
 
   const handleNav = (page: AdminNavPage) => {
@@ -91,15 +92,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
             <button
               key={item.id}
               onClick={() => handleNav(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+              className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-medium transition-all ${
                 isActive
                   ? 'bg-indigo-600 text-white font-semibold shadow-xs'
                   : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <Icon
-                  className={`w-4 h-4 ${
+                  className={`w-4 h-4 shrink-0 ${
                     isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
                   }`}
                 />
@@ -107,7 +108,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
               </div>
               {item.badge && (
                 <span
-                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                     isActive
                       ? 'bg-indigo-700 text-white'
                       : 'bg-slate-800 text-slate-400'
@@ -123,26 +124,26 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
         <div className="pt-4 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
           Portal Workspaces
         </div>
-        <button
-          onClick={() => {
-            setRole('teacher');
-            onClose();
-          }}
-          className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-teal-300 hover:bg-slate-800/50 transition-colors"
-        >
-          <Briefcase className="w-4 h-4 text-teal-400" />
-          <span>Switch to Faculty Portal</span>
-        </button>
-        <button
-          onClick={() => {
-            setRole('student');
-            onClose();
-          }}
-          className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-blue-300 hover:bg-slate-800/50 transition-colors"
-        >
-          <GraduationCap className="w-4 h-4 text-blue-400" />
-          <span>Switch to Student Portal</span>
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            title={`Open your teacher workspace (${currentUser?.email || 'signed-in account'})`}
+            onClick={() => { setRole('teacher'); onClose(); }}
+            className="w-full flex items-start gap-3 rounded-xl border border-teal-800/70 bg-teal-950/40 px-3 py-3 text-left hover:bg-teal-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 transition-colors"
+          >
+            <Briefcase className="w-4 h-4 shrink-0 text-teal-300 mt-0.5" />
+            <span className="min-w-0"><span className="block text-xs font-semibold text-teal-100">My Teacher Workspace</span><span className="block truncate text-[10px] text-teal-300 mt-1">{currentUser?.email || 'Your assigned classes'}</span></span>
+          </button>
+          <button
+            type="button"
+            title="Preview as Demo Student without changing real student records"
+            onClick={() => { setRole('student'); onClose(); }}
+            className="w-full flex items-start gap-3 rounded-xl border border-blue-800/70 bg-blue-950/40 px-3 py-3 text-left hover:bg-blue-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors"
+          >
+            <GraduationCap className="w-4 h-4 shrink-0 text-blue-300 mt-0.5" />
+            <span className="min-w-0"><span className="block text-xs font-semibold text-blue-100">Student Preview</span><span className="block text-[10px] text-blue-300 mt-1">Demo Student · Practice only</span></span>
+          </button>
+        </div>
       </nav>
 
       {/* Supabase Status Footer */}
@@ -180,3 +181,5 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     </>
   );
 };
+
+

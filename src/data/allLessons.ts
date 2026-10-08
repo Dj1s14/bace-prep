@@ -1,4 +1,8 @@
+import { REVIEW_LESSONS, enrichFromReview } from './reviewPacketLessons';
+import { EXPANDED_LESSONS } from './expandedLearning';
+import { deepenLesson } from './lessonDeepening';
 import { Lesson } from '../types/database';
+import { COVERAGE_EXPANSION_LESSONS } from './coverageExpansionLessons';
 
 export const ALL_LESSONS: Lesson[] = [
   // -------------------------------------------------------------
@@ -51,7 +55,7 @@ export const ALL_LESSONS: Lesson[] = [
       },
       {
         title: '2. Choosing the Proper Pipette Range',
-        content: 'Standard laboratory pipettes are designated by their maximum nominal volume in microliters:\n• P10 or P20: Ideal for 0.5–10 µL or 2–20 µL (PCR primers, restriction enzymes, loading dyes)\n• P200: Ideal for 20–200 µL (assay reagents, buffer additions, small culture transfers)\n• P1000: Ideal for 100–1000 µL (growth media, diluents, column washes)\nOperating at the lowest end of a pipette range (e.g. measuring 100 µL on a P1000) introduces up to 3–5x more volumetric variance than using a P200 dialed to 100 µL.'
+        content: 'Standard laboratory pipettes are designated by their maximum nominal volume in microliters:\n• P10 or P20: Ideal for 0.5–10 µL or 2–20 µL (PCR primers, restriction enzymes, loading dyes)\n• P200: Ideal for 20–200 µL (assay reagents, buffer additions, small culture transfers)\n• P1000: Ideal for 100–1000 µL (growth media, diluents, column washes)\nOperating at the lowest end of a pipette range (e.g. measuring 100 µL on a P1000) may reduce relative performance compared with a suitable smaller-range pipette. Compare manufacturer specifications at the required volume; there is no universal variance multiplier.'
       },
       {
         title: '3. Aspiration and Dispensing Protocol (Step-by-Step)',
@@ -69,13 +73,13 @@ export const ALL_LESSONS: Lesson[] = [
     display_order: 2,
     active: true,
     key_vocabulary: [
-      { term: 'Dilution Factor (DF)', definition: 'The ratio of initial volume to final total volume (V1 / V2), or initial concentration to final concentration (C1 / C2).' },
+      { term: 'Dilution Factor (DF)', definition: 'The reciprocal dilution factor is final total volume / sample volume, equal to original concentration / diluted concentration. The dilution fraction is its reciprocal.' },
       { term: 'Serial Dilution', definition: 'A systematic stepwise dilution of a substance in solution, where the dilution factor is uniform at each successive step.' },
       { term: 'Aliquot', definition: 'A measured sub-volume of a sample transferred from one container to another.' },
       { term: 'Diluent', definition: 'The solvent or sterile liquid (such as sterile PBS or water) added to reduce concentration.' }
     ],
     important_concepts: [
-      'Individual Dilution Factor = Aliquot Volume / Total Volume (Aliquot + Diluent).',
+      'Dilution fraction = aliquot volume / total volume. Reciprocal dilution factor = total volume / aliquot volume.',
       'Cumulative Dilution Factor is the product of all individual dilution factors: DF_total = DF1 × DF2 × DF3...',
       'Always mix thoroughly (e.g. vortex 3 seconds or pipette mix 5 times) before transferring the aliquot to the next tube in the series.',
       'A 1:10 dilution means 1 part sample plus 9 parts diluent, yielding a 10-fold reduction in concentration.'
@@ -84,7 +88,7 @@ export const ALL_LESSONS: Lesson[] = [
       {
         title: 'Calculating a 10-Fold (1:10) Three-Step Serial Dilution',
         scenario: 'You have a bacterial culture at 1.0 × 10^7 CFU/mL. You transfer 100 µL into 900 µL of sterile broth in Tube 1, mix, and repeat for Tube 2 and Tube 3.',
-        calculation: 'Step 1: 100 µL / (100 µL + 900 µL) = 100 / 1000 = 1/10 (10^-1)\nTube 1 = 1.0 × 10^6 CFU/mL\nTube 2 = 1.0 × 10^5 CFU/mL\nTube 3 = 1.0 × 10^4 CFU/mL\nCumulative DF for Tube 3 = 10 × 10 × 10 = 1,000 (10^-3).',
+        calculation: 'Step 1: 100 µL / (100 µL + 900 µL) = 100 / 1000 = 1/10 (10^-1)\nTube 1 = 1.0 × 10^6 CFU/mL\nTube 2 = 1.0 × 10^5 CFU/mL\nTube 3 = 1.0 × 10^4 CFU/mL\nCumulative DF for Tube 3 = 10 × 10 × 10 = 1,000; the cumulative dilution fraction is 10^-3.',
         solution: 'The concentration in Tube 3 is 1.0 × 10^4 CFU/mL.'
       }
     ],
@@ -130,7 +134,7 @@ export const ALL_LESSONS: Lesson[] = [
       {
         title: 'Sterilizing a Biosafety Cabinet Prior to Cell Seeding',
         scenario: 'A technician arrives at a Class II Type A2 biosafety cabinet to prepare mammalian culture flasks.',
-        solution: 'Turn on blower for 10–15 minutes before work to purge air. Spray and wipe all interior surfaces with 70% ethanol working from cleanest to dirtiest (back to front, top to bottom). Spray all items with 70% ethanol before placing them inside. Allow surfaces to air-dry completely for appropriate contact time (minimum 30 seconds). Keep the front sash at the certified height.'
+        solution: 'Verify cabinet status and certification, use the manufacturer-specified startup time and sash position, and decontaminate surfaces and compatible items with the approved agent and required wet contact time. Keep airflow grilles clear. The disinfectant, application method, and contact time depend on the hazard and SOP; 70% ethanol is not a universal treatment.'
       }
     ],
     common_mistakes: [
@@ -226,7 +230,7 @@ export const ALL_LESSONS: Lesson[] = [
       {
         title: 'Setting Annealing Temperature Based on Primer Tm',
         scenario: 'Forward primer has a Tm of 60°C and reverse primer has a Tm of 58°C.',
-        solution: 'Always base the annealing temperature on the lower Tm. Setting Ta to 53–55°C (3–5°C below 58°C) allows specific hybridization while avoiding non-specific mispriming.'
+        solution: 'A temperature below the lower primer Tm may be an initial estimate in some systems, but select and optimize annealing conditions using the polymerase instructions, primer design, and validated protocol. A melting-temperature calculation alone does not guarantee specificity.'
       }
     ],
     common_mistakes: [
@@ -397,7 +401,7 @@ export const ALL_LESSONS: Lesson[] = [
       { term: 'BSL-1', definition: 'Containment for well-characterized agents not known to consistently cause disease in immunocompetent adults (e.g., non-pathogenic E. coli K-12, Saccharomyces cerevisiae).' },
       { term: 'BSL-2', definition: 'Containment for moderate-risk agents that cause human disease of varying severity via ingestion or percutaneous injury (e.g., Staphylococcus aureus, Lentivirus, human blood).' },
       { term: 'BSL-3', definition: 'Containment for indigenous or exotic agents with potential for aerosol transmission that cause serious or lethal disease (e.g., Mycobacterium tuberculosis, SARS-CoV-2).' },
-      { term: 'BSL-4', definition: 'Maximum containment for dangerous exotic agents posing high individual risk of life-threatening aerosol infections with no available vaccine or therapy (e.g., Ebola virus).' },
+      { term: 'BSL-4', definition: 'Maximum containment for high-risk agents and procedures requiring specialized facilities and practices. Select containment through protocol-driven risk assessment; treatment availability alone does not determine the level.' },
       { term: 'PPE Doffing Sequence', definition: 'The established protocol for removing contaminated protective gear: Gloves first, followed by Goggles/Face Shield, Gown, and Mask/Respirator.' }
     ],
     important_concepts: [
@@ -409,7 +413,7 @@ export const ALL_LESSONS: Lesson[] = [
       {
         title: 'Selecting Biosafety Level for a Transformation Lab',
         scenario: 'High school or undergraduate students are transforming E. coli DH5-alpha with the pGLO plasmid.',
-        solution: 'DH5-alpha is an attenuated, non-pathogenic strain derived from E. coli K-12. This requires BSL-1 containment: standard open lab bench work, decontamination with 70% ethanol, lab coats, and gloves.'
+        solution: 'DH5-alpha is an attenuated, non-pathogenic strain derived from E. coli K-12. It is commonly handled at BSL-1 for approved low-risk procedures, but the complete construct, procedure, and institutional risk assessment determine containment and required PPE/decontamination.'
       }
     ],
     common_mistakes: [
@@ -721,7 +725,7 @@ export const ALL_LESSONS: Lesson[] = [
     active: true,
     key_vocabulary: [
       { term: 'Autoclave', definition: 'A pressure chamber using saturated pressurized steam to sterilize equipment, media, and biohazardous waste.' },
-      { term: 'Sterilization Parameters', definition: 'The standard minimum cycle: 121°C (250°F) at 15 pounds per square inch (psi) gauge pressure for 20–30 minutes.' },
+      { term: 'Sterilization Parameters', definition: 'Validated, load-specific steam temperature and exposure time. A 121°C cycle is a common example, not a universal minimum or sufficient proof of sterilization.' },
       { term: 'Geobacillus stearothermophilus', definition: 'The thermophilic endospore-forming bacterium used as the biological indicator gold standard for validating autoclave sterilization cycles.' },
       { term: 'Relative Centrifugal Force (RCF)', definition: 'The force exerted on a sample during centrifugation relative to Earth gravity (g-force); RCF = 1.118 × 10^-5 × r(cm) × (RPM)^2.' },
       { term: 'Revolutions Per Minute (RPM)', definition: 'The rotational speed of a centrifuge rotor; unlike RCF, RPM is not universal because g-force depends on rotor radius.' }
@@ -744,7 +748,7 @@ export const ALL_LESSONS: Lesson[] = [
       'Tightening bottle caps completely before placing media into an autoclave, causing pressure explosion.',
       'Reporting centrifugation protocol parameters in RPM without specifying rotor radius or RCF.'
     ],
-    bace_exam_tip: 'Two guaranteed BACE questions: 1. Autoclave parameters: 121°C at 15 psi for 20–30 minutes. 2. Why RCF is preferred over RPM: RCF measures actual centrifugal gravitational force, whereas RPM depends on rotor radius!',
+    bace_exam_tip: 'Understand load-specific steam sterilization and required verification. RCF depends on rotor radius and RPM squared, so RPM alone does not specify the force experienced by a sample.',
     sections: [
       {
         title: '1. High-Pressure Steam Sterilization',
@@ -839,7 +843,7 @@ export const ALL_LESSONS: Lesson[] = [
       'Reporting experimental results as valid when the negative control shows a positive signal.',
       'Omitting a vehicle control when testing hydrophobic drugs dissolved in DMSO or ethanol.'
     ],
-    bace_exam_tip: 'On the BACE: A negative control proves absence of contamination. A positive control proves assay reagents work. If either control fails, the experiment is INVALID!',
+    bace_exam_tip: 'A negative control helps detect contamination or background; a positive control checks that the tested assay function works. Apply predefined control acceptance rules before interpreting samples. Passing controls do not prove absence of every possible error.',
     sections: [
       {
         title: '1. The Structure of Controlled Scientific Experiments',
@@ -863,7 +867,7 @@ export const ALL_LESSONS: Lesson[] = [
     key_vocabulary: [
       { term: 'Standard Curve', definition: 'A quantitative calibration plot showing the relationship between known concentrations of a substance and their assay response (e.g., absorbance).' },
       { term: 'Linear Dynamic Range', definition: 'The concentration span over which the assay response is directly proportional to analyte concentration and obeys Beer\'s Law.' },
-      { term: 'Coefficient of Determination (R^2)', definition: 'A statistical measure of how well the regression line approximates real data points; an R^2 value >= 0.98 is typically required in bioscience QC.' },
+      { term: 'Coefficient of Determination (R^2)', definition: 'A statistical measure of how well the regression line approximates real data points; acceptance depends on the validated assay, model, and additional quality checks rather than a universal cutoff.' },
       { term: 'Interpolation', definition: 'Calculating unknown concentrations that fall WITHIN the range of tested known standard points.' },
       { term: 'Extrapolation', definition: 'Estimating values OUTSIDE the tested range; prone to severe error because linearity and assay saturation are unknown.' }
     ],
@@ -894,8 +898,11 @@ export const ALL_LESSONS: Lesson[] = [
       },
       {
         title: '2. Evaluating Goodness of Fit and Assay Limits',
-        content: 'Linear regression calculates the best-fit line through standard data points. The R^2 value indicates the proportion of variance explained by the model. Values below 0.98 signify pipetting inaccuracy, sample degradation, or detector saturation.'
+        content: 'Linear regression calculates the best-fit line through standard data points. The R^2 value indicates the proportion of variance explained by the model. A poor fit can have many causes; investigate standards, model suitability, range, residuals, and controls. R² alone does not diagnose a cause or establish assay validity.'
       }
     ]
-  }
-];
+  },
+  ...COVERAGE_EXPANSION_LESSONS,
+  ...EXPANDED_LESSONS,
+  ...REVIEW_LESSONS,
+].map(deepenLesson).map(enrichFromReview);

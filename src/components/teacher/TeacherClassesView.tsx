@@ -1,3 +1,4 @@
+import { requestPasswordRecovery } from '../../lib/passwordRecovery';
 import React, { useState } from 'react';
 import {
   School,
@@ -30,6 +31,7 @@ import { CreateStudentModal } from '../common/CreateStudentModal';
 
 export const TeacherClassesView: React.FC = () => {
   const {
+    currentTeacher,
     classes,
     students,
     createClass,
@@ -46,7 +48,6 @@ export const TeacherClassesView: React.FC = () => {
     purgeDemoData,
     transferStudentPeriod,
     regenerateClassJoinCode,
-    resetStudentAccess,
     deleteStudentAccount,
   } = useApp();
 
@@ -60,14 +61,6 @@ export const TeacherClassesView: React.FC = () => {
   // Transfer Student Modal State
   const [transferringStudent, setTransferringStudent] = useState<StudentOverview | null>(null);
   const [targetClassIdForTransfer, setTargetClassIdForTransfer] = useState<string>('');
-
-  // Reset Student Access Modal State
-  const [resetModalData, setResetModalData] = useState<{
-    studentName: string;
-    tempPassword: string;
-    studentEmail: string;
-  } | null>(null);
-  const [copiedResetPassword, setCopiedResetPassword] = useState(false);
 
   // Remove Student Confirmation State
   const [studentToRemove, setStudentToRemove] = useState<StudentOverview | null>(null);
@@ -91,21 +84,23 @@ export const TeacherClassesView: React.FC = () => {
   const [period, setPeriod] = useState('Period 1');
   const [examDate, setExamDate] = useState('2026-05-12');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    createClass({
+    try {
+    await createClass({
       name,
-      teacher_id: 'teacher_1',
+      teacher_id: currentTeacher.id,
       period,
       school_year: '2025-2026',
-      join_code: `WAGNER${period.replace(/\D/g, '') || '1'}0${Math.floor(10 + Math.random() * 90)}`,
+      join_code: `W-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`,
     });
 
     setName('');
     setShowCreateModal(false);
     showNotification('New class section created successfully.');
+    } catch (error) { showNotification((error as any)?.message || 'Class could not be saved.'); }
   };
 
   const handleCopyCode = async (code: string) => {
@@ -149,14 +144,9 @@ export const TeacherClassesView: React.FC = () => {
     setTransferringStudent(null);
   };
 
-  const handleInitiateResetAccess = (student: StudentOverview) => {
-    const result = resetStudentAccess(student.profile.id);
-    setResetModalData({
-      studentName: result.studentName,
-      tempPassword: result.tempPassword,
-      studentEmail: student.profile.email,
-    });
-    setCopiedResetPassword(false);
+  const handleInitiateResetAccess = async (student: StudentOverview) => {
+    try { await requestPasswordRecovery(student.profile.email); showNotification('Recovery email requested. Ask the student to check their inbox.', 'info'); }
+    catch (error: any) { showNotification(error.message, 'info'); }
   };
 
   const handleConfirmRemoveStudent = () => {
@@ -401,7 +391,7 @@ export const TeacherClassesView: React.FC = () => {
                 {activeClass.name} — Student Roster ({classStudents.length})
               </h2>
               <p className="text-xs text-slate-500">
-                Manage enrollment, initiate period transfers, reset student passwords, and inspect BACE domain readiness.
+                Manage enrollment, initiate period transfers, review account-reset guidance, and inspect BACE domain readiness.
               </p>
             </div>
 
@@ -475,6 +465,10 @@ export const TeacherClassesView: React.FC = () => {
                               {stu.profile.first_name} {stu.profile.last_name}
                             </div>
                             <div className="text-[10px] text-slate-400 font-normal">{stu.profile.email}</div>
+                            <button className="text-xs text-blue-700 underline" onClick={async () => {
+                              try { await requestPasswordRecovery(stu.profile.email); showNotification('Recovery email requested. The student should check their inbox.', 'info'); }
+                              catch (error: any) { showNotification(error.message, 'info'); }
+                            }}>Send password recovery</button>
                           </div>
                         </div>
                       </td>
@@ -534,10 +528,10 @@ export const TeacherClassesView: React.FC = () => {
                           <button
                             onClick={() => handleInitiateResetAccess(stu)}
                             className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center space-x-1"
-                            title="Issue temporary credentials"
+                            title="Send an email recovery link"
                           >
                             <Lock className="w-3 h-3" />
-                            <span>Reset</span>
+                            <span>Recovery email</span>
                           </button>
 
                           {/* Remove Student */}
@@ -644,74 +638,7 @@ export const TeacherClassesView: React.FC = () => {
         </div>
       )}
 
-      {/* Reset Password / Student Access Modal */}
-      {resetModalData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Student Access Reset</h3>
-                  <p className="text-xs text-slate-500">Temporary password generated</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setResetModalData(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <p className="text-xs text-slate-600">
-              A temporary security credential has been created for candidate{' '}
-              <strong>{resetModalData.studentName}</strong> ({resetModalData.studentEmail}). Share this password with the student:
-            </p>
-
-            <div className="p-3 rounded-xl bg-slate-900 text-white font-mono flex items-center justify-between">
-              <span className="text-sm font-bold tracking-wider text-teal-300">
-                {resetModalData.tempPassword}
-              </span>
-              <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(resetModalData.tempPassword);
-                  setCopiedResetPassword(true);
-                  setTimeout(() => setCopiedResetPassword(false), 2000);
-                }}
-                className="inline-flex items-center space-x-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-              >
-                {copiedResetPassword ? (
-                  <>
-                    <Check className="w-3 h-3 text-teal-400" />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3" />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <p className="text-[11px] text-slate-500">
-              The student can sign in immediately with their email address and this temporary password.
-            </p>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setResetModalData(null)}
-                className="px-4 py-2 text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg transition-colors cursor-pointer"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Remove Student Confirmation Modal */}
       {studentToRemove && (

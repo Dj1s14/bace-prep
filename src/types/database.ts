@@ -61,6 +61,7 @@ export interface UserAccount {
 }
 
 export interface TeacherProfile {
+  role?: 'teacher' | 'admin';
   id: string;
   prefix?: string; // 'Dr.', 'Mr.', 'Ms.', 'Mrs.', 'Prof.', etc.
   first_name: string;
@@ -137,6 +138,7 @@ export interface LabActivityScenario {
     id: string;
     text: string;
     is_correct: boolean;
+  explanation?: string;
     feedback: string;
   }>;
   explanation: string;
@@ -163,6 +165,7 @@ export interface Lesson {
   common_mistakes: string[];
   bace_exam_tip: string;
   sections: LessonSection[];
+  references?: Array<{ title: string; url: string }>;
   roadmap_topics?: string[];
   bench_modules?: BenchSkillTopic[];
   lab_activities?: LabActivityScenario[];
@@ -173,6 +176,7 @@ export interface QuestionChoice {
   question_id?: string;
   choice_text: string;
   is_correct: boolean;
+  explanation?: string;
   display_order?: number;
 }
 
@@ -192,9 +196,15 @@ export interface Question {
   created_at?: string;
 }
 
+export interface CompletedQuestionReview {
+  question: Question;
+  selected_choice_id: string | null;
+}
+
 export interface QuizAttempt {
   id: string;
   student_id: string;
+  review_questions?: CompletedQuestionReview[] | null;
   quiz_type: 'practice' | 'practice_drill' | 'mock_quick' | 'mock_half' | 'mock_full' | 'lesson_check';
   domain_id?: string;
   score: number;
@@ -212,6 +222,7 @@ export interface QuizAnswer {
   question_id: string;
   selected_choice_id: string;
   is_correct: boolean;
+  explanation?: string;
   answered_at: string;
 }
 
@@ -403,5 +414,6 @@ export interface UserAccount {
   class_id?: string;
   created_at: string;
 }
+
 
 

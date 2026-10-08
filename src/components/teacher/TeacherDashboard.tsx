@@ -1,3 +1,4 @@
+import { ClassroomFollowUp } from './ClassroomFollowUp';
 import React, { useState } from 'react';
 import {
   Users,
@@ -128,6 +129,7 @@ export const TeacherDashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-16">
+      <ClassroomFollowUp />
       {/* Teacher Welcome Header */}
       <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">

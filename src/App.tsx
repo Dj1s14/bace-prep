@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { PasswordRecovery } from './components/auth/PasswordRecovery';
+import { SaveStatus } from './components/common/SaveStatus';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { StudentSidebar } from './components/common/StudentSidebar';
@@ -44,6 +46,8 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
     returnToFacultyConsole,
     studentPage,
     teacherPage,
+    selectedLessonId,
+    selectedDomainId,
   } = useApp();
 
   // Strict RBAC Enforcement:
@@ -107,6 +111,21 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
     }
   };
 
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (currentRole !== 'student') return;
+    const reset = () => {
+      const main = mainScrollRef.current;
+      if (main) { main.scrollTop = 0; main.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    };
+    reset();
+    // Run once after child effects so content/focus changes cannot retain the old position.
+    const frame = requestAnimationFrame(reset);
+    return () => cancelAnimationFrame(frame);
+  }, [currentRole, studentPage, selectedDomainId, selectedLessonId]);
+
   // When taking a mock exam, give full focus without distracting sidebar
   const isTakingExam = currentRole === 'student' && studentPage === 'mock_exam_runner';
 
@@ -117,14 +136,15 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
         isMobileMenuOpen={sidebarOpen}
       />
 
+      <SaveStatus />
       {/* Faculty Previewing Student Mode Alert Banner */}
       {isFacultyPreviewingStudent && (
         <div className="bg-indigo-950 text-indigo-100 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-indigo-800 shadow-sm z-30">
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             <span>
-              <strong>Faculty Preview Mode Active:</strong> You are previewing the student candidate portal as{' '}
-              <span className="font-semibold text-white">{currentUser?.first_name} {currentUser?.last_name}</span>. Real candidates cannot access teacher consoles.
+              <strong>Faculty Preview Mode Active:</strong> You are using the generic preview account:{' '}
+              <span className="font-semibold text-white">Demo Student</span>. Preview work does not change student records.
             </span>
           </div>
           <button
@@ -150,7 +170,7 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
           <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         )}
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 w-full relative">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 w-full relative">
           <div className="max-w-7xl mx-auto">
             {currentRole === 'student'
               ? renderStudentPage()
@@ -183,6 +203,7 @@ const AppRoot: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
+      <PasswordRecovery />
       <AppRoot />
     </AppProvider>
   );

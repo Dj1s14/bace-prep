@@ -1,3 +1,6 @@
+import { captureTestReview } from '../../lib/completedTests';
+import { recordAnswerReview } from '../../lib/studyReviews';
+import { AnswerExplanations } from './AnswerExplanations';
 import React, { useState } from 'react';
 import {
   HelpCircle,
@@ -18,9 +21,15 @@ import { useApp } from '../../context/AppContext';
 import { DomainIcon } from '../common/DomainIcon';
 import { Question } from '../../types/database';
 import { cleanQuestionText } from '../../utils/questionUtils';
+import { allocateQuestionsByPointWeight } from '../../data/baceBlueprint';
 
 export const PracticeView: React.FC = () => {
   const {
+    currentUser,
+    currentStudent,
+    isProduction,
+    isFacultyPreviewingStudent,
+    recordExamSubmission,
     domains,
     topics,
     lessons,
@@ -40,12 +49,27 @@ export const PracticeView: React.FC = () => {
     isFinished: boolean;
   } | null>(null);
 
+  const practiceStartedAt = React.useRef(new Date().toISOString());
+  const practiceRecorded = React.useRef(false);
+  React.useEffect(() => {
+    if (!activeSession?.isFinished || practiceRecorded.current) return;
+    practiceRecorded.current = true;
+    const breakdown: Record<string, { correct: number; total: number; percentage: number }> = {};
+    for (const question of activeSession.questions) {
+      const entry = breakdown[question.domain_id] ||= { correct: 0, total: 0, percentage: 0 };
+      entry.total++; if (question.choices.some(c => c.is_correct && c.id === activeSession.selectedChoices[question.id])) entry.correct++;
+      entry.percentage = Math.round(entry.correct / entry.total * 100);
+    }
+    void recordExamSubmission({ id: `practice_${crypto.randomUUID()}`, student_id: currentStudent.profile.id, quiz_type: 'practice_drill', score: activeSession.score, total_questions: activeSession.questions.length, percentage: Math.round(activeSession.score / Math.max(1,activeSession.questions.length)*100), started_at: practiceStartedAt.current, completed_at: new Date().toISOString(), time_spent_seconds: Math.round((Date.now()-Date.parse(practiceStartedAt.current))/1000), domain_breakdown: breakdown, review_questions: captureTestReview(activeSession.questions, activeSession.selectedChoices) }).catch(console.error);
+  }, [activeSession?.isFinished]);
+
   // Quick preset starters
   const startPresetPractice = (
     mode: string,
-    options?: { domainId?: string; topicId?: string; lessonId?: string; count?: number }
+    options?: { domainId?: string; topicId?: string; lessonId?: string; questionIds?: string[]; count?: number }
   ) => {
-    let pool = [...questions];
+    let pool = questions.filter(q => q.active !== false);
+    if (options?.questionIds) pool = pool.filter(q => options.questionIds!.includes(q.id));
 
     if (options?.lessonId) {
       pool = pool.filter((q) => q.lesson_id === options.lessonId);
@@ -54,15 +78,47 @@ export const PracticeView: React.FC = () => {
     } else if (options?.topicId) {
       pool = pool.filter((q) => q.topic_id === options.topicId);
     } else if (mode === 'Weakest Topics') {
-      // Prioritize d4 (Applied Math) and d1 (Serial Dilutions)
-      pool = pool.filter((q) => q.domain_id === 'd4' || q.topic_id === 't1_3' || q.domain_id === 'd6');
+      const weakest = [...domains].sort((a,b) => (currentStudent.domain_mastery[a.id] || 0) - (currentStudent.domain_mastery[b.id] || 0)).slice(0,2);
+      pool = pool.filter(q => weakest.some(domain => domain.id === q.domain_id));
     }
 
-    // Shuffle pool
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const count = options?.count || 10;
-    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    let selected: Question[] = [];
 
+    const hasSpecificFilter = Boolean(options?.questionIds || options?.lessonId || options?.domainId || options?.topicId) || mode === 'Weakest Topics';
+
+    if (!hasSpecificFilter) {
+      // Mixed practice follows the published BACE point-weight distribution
+      // so the oversized legacy Domain 1 banks cannot dominate random sessions.
+      const targets = allocateQuestionsByPointWeight(count);
+      const used = new Set<string>();
+
+      domains.forEach((domain) => {
+        const domainPool = questions
+          .filter((q) => q.domain_id === domain.id && q.active !== false)
+          .sort(() => 0.5 - Math.random());
+        const take = Math.min(targets[domain.id] || 0, domainPool.length);
+        domainPool.slice(0, take).forEach((q) => {
+          selected.push(q);
+          used.add(q.id);
+        });
+      });
+
+      if (selected.length < count) {
+        const remainder = questions
+          .filter((q) => q.active !== false && !used.has(q.id))
+          .sort(() => 0.5 - Math.random());
+        selected.push(...remainder.slice(0, count - selected.length));
+      }
+
+      selected = selected.slice(0, count).sort(() => 0.5 - Math.random());
+    } else {
+      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    }
+
+    practiceRecorded.current = false;
+    practiceStartedAt.current = new Date().toISOString();
     setActiveSession({
       questions: selected.length > 0 ? selected : questions.slice(0, 10),
       currentIndex: 0,
@@ -81,6 +137,7 @@ export const PracticeView: React.FC = () => {
         domainId: activePracticeConfig.domainId,
         topicId: activePracticeConfig.topicId,
         lessonId: activePracticeConfig.lessonId,
+        questionIds: activePracticeConfig.questionIds,
         count: activePracticeConfig.count,
       });
       setActivePracticeConfig(null);
@@ -113,11 +170,12 @@ export const PracticeView: React.FC = () => {
   };
 
   const handleSubmitAnswer = (questionId: string) => {
-    if (!activeSession || !activeSession.selectedChoices[questionId]) return;
+    if (!activeSession || activeSession.submitted[questionId] || !activeSession.selectedChoices[questionId]) return;
 
     const currentQ = activeSession.questions[activeSession.currentIndex];
     const correctChoice = currentQ.choices.find((c) => c.is_correct);
     const isCorrect = activeSession.selectedChoices[questionId] === correctChoice?.id;
+    if (isProduction && currentUser && !isFacultyPreviewingStudent) void recordAnswerReview(currentUser.id, currentQ, isCorrect).catch(console.error);
 
     setActiveSession((prev) =>
       prev
@@ -302,6 +360,7 @@ export const PracticeView: React.FC = () => {
                   <strong>Explanation:</strong> {cleanQuestionText(currentQ.explanation)}
                 </p>
 
+                <AnswerExplanations question={currentQ} />
                 <div className="pt-2 text-xs text-slate-500 font-medium">
                   Related BACE Topic: <strong>{topic?.name || domain?.name}</strong>
                 </div>
