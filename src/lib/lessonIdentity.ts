@@ -9,8 +9,14 @@ export function legacyStudentIds(
   students: StudentOverview[],
 ): string[] {
   const email = verifiedEmail.trim().toLowerCase();
+  let knownAliases: string[] = [];
+  try {
+    const aliases = JSON.parse(localStorage.getItem('bace_student_identity_aliases') || '{}');
+    if (Array.isArray(aliases[email])) knownAliases = aliases[email];
+  } catch { /* preserve data on malformed legacy storage */ }
   return [...new Set([
     canonicalUserId,
+    ...knownAliases,
     ...students.filter(s => s.profile.email.trim().toLowerCase() === email)
       .map(s => s.profile.id),
   ])];
@@ -41,6 +47,14 @@ export function mergeCloudStudent(
   if (index < 0) return [...existing, cloud];
   const result = [...existing];
   const local = result[index];
+  if (local.profile.id !== cloud.profile.id) {
+    try {
+      const raw = localStorage.getItem('bace_student_identity_aliases');
+      const aliases = raw ? JSON.parse(raw) : {};
+      aliases[email] = [...new Set([...(aliases[email] || []), local.profile.id])];
+      localStorage.setItem('bace_student_identity_aliases', JSON.stringify(aliases));
+    } catch { /* cloud sync still uses the canonical ID */ }
+  }
   result[index] = {
     ...local,
     profile: { ...local.profile, ...cloud.profile, id: cloud.profile.id },
