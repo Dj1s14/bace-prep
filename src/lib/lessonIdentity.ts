@@ -47,20 +47,22 @@ export function mergeCloudStudent(
   if (index < 0) return [...existing, cloud];
   const result = [...existing];
   const local = result[index];
-  if (local.profile.id !== cloud.profile.id) {
+  const duplicates = result.filter(s => s.profile.email.trim().toLowerCase() === email);
+  const legacyIds = duplicates.map(s => s.profile.id).filter(id => id !== cloud.profile.id);
+  if (legacyIds.length) {
     try {
       const raw = localStorage.getItem('bace_student_identity_aliases');
       const aliases = raw ? JSON.parse(raw) : {};
-      aliases[email] = [...new Set([...(aliases[email] || []), local.profile.id])];
+      aliases[email] = [...new Set([...(aliases[email] || []), ...legacyIds])];
       localStorage.setItem('bace_student_identity_aliases', JSON.stringify(aliases));
-    } catch { /* cloud sync still uses the canonical ID */ }
+    } catch { /* keep recovery info in old roster if storage fails */ }
   }
   result[index] = {
     ...local,
     profile: { ...local.profile, ...cloud.profile, id: cloud.profile.id },
     class_id: cloud.class_id || local.class_id,
-    lessons_completed: Math.max(local.lessons_completed, cloud.lessons_completed),
+    lessons_completed: Math.max(...duplicates.map(s => s.lessons_completed), cloud.lessons_completed),
   };
   return result.filter((student, i) =>
-    i === index || student.profile.id !== cloud.profile.id);
+    i === index || student.profile.email.trim().toLowerCase() !== email);
 }
