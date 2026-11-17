@@ -1718,7 +1718,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     void restore();
     const { data: { subscription } } = sb.auth.onAuthStateChange(() => {
-      void restore();
+      // Avoid a nested Auth request inside Supabase's auth-change lock.
+      window.setTimeout(() => { if (!cancelled) void restore(); }, 0);
     });
     return () => { cancelled = true; subscription.unsubscribe(); };
   }, [environment]);
