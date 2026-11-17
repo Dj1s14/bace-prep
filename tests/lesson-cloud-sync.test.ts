@@ -74,7 +74,7 @@ function mockClient(options:{auth?:boolean; wrongRole?:boolean; failGradeInsert?
       return chain;
     },
     async insert(rows:Array<Record<string,unknown>>) {
-      if (table==='lesson_grades' && options.failGradeInsert) return {error:{message:'simulated failure'}};
+      if (table==='lesson_grades' && options.failGradeInsert) return {error:new Error('simulated failure')};
       writes+=rows.length;
       tables[table].push(...rows.map(v=>({...v})));
       return {error:null};
