@@ -25,6 +25,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useApp, DEFAULT_FACULTY_ACCESS_CODE, DEFAULT_ADMIN_ACCESS_CODE } from '../../context/AppContext';
+import { getSupabase } from '../../lib/supabase';
 
 export const LandingPage: React.FC = () => {
   const {
@@ -86,27 +87,39 @@ export const LandingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // Unified Sign In Handler
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
-
-    if (!loginEmail.trim()) {
-      setErrorMsg('Please enter your email address.');
-      return;
-    }
-
-    if (!loginPassword || loginPassword.trim().length === 0) {
-      setErrorMsg('Please enter your password.');
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setErrorMsg('Please enter your email and password.');
       return;
     }
 
     setLoading(true);
+    // Cloud authentication happens BEFORE any browser-based legacy session.
+    // Legacy accounts remain accessible for exporting old work, but a missing
+    // Supabase session is explicitly flagged by the lesson save status banner.
+    let cloudError: string | null = null;
+    const client = getSupabase();
+    if (client) {
+      const { error } = await client.auth.signInWithPassword({
+        email: loginEmail.trim().toLowerCase(),
+        password: loginPassword,
+      });
+      cloudError = error?.message || null;
+    } else {
+      cloudError = 'Supabase is not configured.';
+    }
+
     const res = loginUser(loginEmail.trim(), loginPassword);
     setLoading(false);
-
-    if (!res.success && res.error) {
-      setErrorMsg(res.error);
+    if (!res.success) {
+      if (client && !cloudError) await client.auth.signOut();
+      setErrorMsg(res.error || 'Sign-in failed.');
+    } else if (cloudError) {
+      // The student can access old browser work, but must not be told it is backed up.
+      console.warn('Cloud sign-in unavailable; lesson work remains local:', cloudError);
     }
   };
 
