@@ -142,20 +142,33 @@ export async function loadInstructorLessonData(profile: Profile): Promise<{
   if (roleError || !['teacher','admin'].includes(remoteProfile?.role || '')) {
     throw new Error('Your Supabase account is not authorized for instructor grade access.');
   }
-  const [profilesResult, gradesResult, progressResult] = await Promise.all([
-    client.from('profiles').select('id,email,first_name,last_name,role,class_id,created_at').eq('role', 'student'),
-    client.from('lesson_grades').select('*'),
-    client.from('lesson_progress').select('student_id,lesson_id').eq('completed',true),
+  // Supabase Data API returns at most 1,000 rows per response by default.
+  // Page through the full authorized teacher roster/gradebook, preserving RLS.
+  const readAll = async (table: string, select: string, filtered = false) => {
+    const records: Record<string, any>[] = [];
+    for (let start = 0; start < 100000; start += 1000) {
+      let query = client.from(table).select(select).range(start, start + 999);
+      if (filtered) query = query.eq('role', 'student');
+      const { data, error } = await query;
+      if (error) throw error;
+      const batch = (data || []) as Record<string, any>[];
+      records.push(...batch);
+      if (batch.length < 1000) return records;
+    }
+    throw new Error('Gradebook exceeds the safe pagination limit.');
+  };
+  const [visibleProfiles, visibleGrades, visibleProgress] = await Promise.all([
+    readAll('profiles', 'id,email,first_name,last_name,role,class_id,created_at', true),
+    readAll('lesson_grades', '*'),
+    readAll('lesson_progress', 'student_id,lesson_id'),
   ]);
-  if (profilesResult.error) throw profilesResult.error;
-  if (gradesResult.error) throw gradesResult.error;
-  if (progressResult.error) throw progressResult.error;
   const completionCount = new Map<string,Set<string>>();
-  for (const p of progressResult.data || []) {
+  for (const p of visibleProgress) {
+    if (p.completed === false) continue;
     if (!completionCount.has(p.student_id)) completionCount.set(p.student_id, new Set());
     completionCount.get(p.student_id)!.add(p.lesson_id);
   }
-  const students: StudentOverview[] = (profilesResult.data || []).map(p => ({
+  const students: StudentOverview[] = visibleProfiles.map(p => ({
     profile: {
       id:p.id, email:p.email,first_name:p.first_name,last_name:p.last_name,
       role:'student',class_id:p.class_id || '',created_at:p.created_at,
@@ -167,5 +180,5 @@ export async function loadInstructorLessonData(profile: Profile): Promise<{
     questions_attempted:0, accuracy:0,mock_exam_scores:[],
     weakest_topics:[],strongest_topics:[],recent_activities:[],
   }));
-  return { students, grades:(gradesResult.data || []) as LessonGradeRecord[] };
+  return { students, grades:visibleGrades as unknown as LessonGradeRecord[] };
 }
