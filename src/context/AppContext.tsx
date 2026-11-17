@@ -860,7 +860,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [studentCompletedLessonsMap, setStudentCompletedLessonsMap] = useState<Record<string, string[]>>(() => {
     try {
       const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-      return loadEnvData(env, 'student_completed_lessons', {});
+      const environmentRecords = loadEnvData<Record<string, string[]>>(env, 'student_completed_lessons', {});
+      // Older versions wrote completions to the unscoped key only.
+      // Merge both copies; never replace an existing student's completed work.
+      if (env !== 'production') return environmentRecords;
+      const legacyRaw = localStorage.getItem(STORAGE_KEYS.STUDENT_COMPLETED_LESSONS);
+      const legacyRecords = legacyRaw ? JSON.parse(legacyRaw) as Record<string, string[]> : {};
+      const merged = { ...legacyRecords, ...environmentRecords };
+      for (const studentId of new Set([...Object.keys(legacyRecords), ...Object.keys(environmentRecords)])) {
+        merged[studentId] = [...new Set([...(legacyRecords[studentId] || []), ...(environmentRecords[studentId] || [])])];
+      }
+      return merged;
     } catch {
       return {};
     }
@@ -1093,8 +1103,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [assignmentProgress]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.STUDENT_COMPLETED_LESSONS, JSON.stringify(studentCompletedLessonsMap));
-  }, [studentCompletedLessonsMap]);
+    // Save both storage formats during transition for lossless recovery.
+    saveEnvData(environment, 'student_completed_lessons', studentCompletedLessonsMap);
+    if (environment === 'production') {
+      localStorage.setItem(STORAGE_KEYS.STUDENT_COMPLETED_LESSONS, JSON.stringify(studentCompletedLessonsMap));
+    }
+  }, [studentCompletedLessonsMap, environment]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ACTIVITY_SESSIONS, JSON.stringify(activitySessions));
