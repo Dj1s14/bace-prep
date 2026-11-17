@@ -906,15 +906,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [lessonCloudStatus, setLessonCloudStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lessonCloudMessage, setLessonCloudMessage] = useState('Cloud save has not been verified.');
   const syncBusy = React.useRef(false);
+  const syncPending = React.useRef(false);
+  const latestLessonState = React.useRef({ currentUser, students, lessonGrades, studentCompletedLessonsMap });
+  latestLessonState.current = { currentUser, students, lessonGrades, studentCompletedLessonsMap };
   const syncLessonWorkNow = async () => {
-    if (environment !== 'production' || !currentUser || currentUser.role !== 'student' || syncBusy.current) return;
+    const latest = latestLessonState.current;
+    if (environment !== 'production' || !latest.currentUser || latest.currentUser.role !== 'student') return;
+    if (syncBusy.current) { syncPending.current = true; return; }
     syncBusy.current = true;
     setLessonCloudStatus('saving');
     setLessonCloudMessage('Checking and saving your lesson work…');
     try {
-      const ids = legacyStudentIds(currentUser.email, currentUser.id, students);
-      const pending = collectStudentLessons(ids, lessonGrades, studentCompletedLessonsMap);
-      const saved = await syncStudentLessons(currentUser, pending.grades, pending.completed, ids);
+      const ids = legacyStudentIds(latest.currentUser.email, latest.currentUser.id, latest.students);
+      const pending = collectStudentLessons(ids, latest.lessonGrades, latest.studentCompletedLessonsMap);
+      const saved = await syncStudentLessons(latest.currentUser, pending.grades, pending.completed, ids);
       // Only merge. Do not discard unsaved work for other students or this student.
       setLessonGrades(prev => {
         const ids = new Set(prev.map(g => g.id));
@@ -922,9 +927,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return incoming.length ? [...prev, ...incoming] : prev;
       });
       setStudentCompletedLessonsMap(prev => {
-        const old = prev[currentUser.id] || [];
+        const old = prev[latest.currentUser.id] || [];
         const merged = [...new Set([...old, ...saved.completed])];
-        return merged.length === old.length ? prev : { ...prev, [currentUser.id]: merged };
+        return merged.length === old.length ? prev : { ...prev, [latest.currentUser.id]: merged };
       });
       setLessonCloudStatus('saved');
       setLessonCloudMessage('Lesson work verified in Supabase.');
@@ -933,6 +938,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLessonCloudMessage(err instanceof Error ? err.message : 'Cloud save failed. Browser copy preserved.');
     } finally {
       syncBusy.current = false;
+      if (syncPending.current) {
+        syncPending.current = false;
+        void syncLessonWorkNow();
+      }
     }
   };
   const backupMyLessonWork = () => {
@@ -1665,6 +1674,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // for production access. Old roster entries are retained for data recovery.
   const acceptVerifiedAccount = (profile: Profile) => {
     if (environment !== 'production') return;
+    if (profile.role === 'student') {
+      const knownIds = legacyStudentIds(profile.email, profile.id, students);
+      setLessonGrades(prev => prev.map(g => knownIds.includes(g.student_id) && g.student_id !== profile.id
+        ? { ...g, student_id: profile.id,
+          teacher_notes: [g.teacher_notes, '[Recovered from browser storage; verify historical submission]'].filter(Boolean).join(' '),
+        } : g));
+    }
     setCurrentUser(profile);
     setRoleState(profile.role);
     if (profile.role === 'student') {
