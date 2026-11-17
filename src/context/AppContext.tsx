@@ -34,6 +34,7 @@ import {
 import { cleanQuestionText } from '../utils/questionUtils';
 import { getSupabase } from '../lib/supabase';
 import { syncStudentLessons, downloadStudentLessonBackup, loadInstructorLessonData } from '../lib/cloudLessonSync';
+import { legacyStudentIds, collectStudentLessons, mergeCloudStudent } from '../lib/lessonIdentity';
 
 export type StudentNavPage =
   | 'dashboard'
@@ -135,6 +136,7 @@ interface AppContextType {
     access_code?: string;
   }) => { success: boolean; error?: string; profile?: Profile };
   loginUser: (email: string, password?: string, preferredRole?: UserRole) => { success: boolean; error?: string };
+  acceptVerifiedAccount: (profile: Profile) => void;
   signOut: () => void;
 
   // Faculty Access Code Security
@@ -676,6 +678,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<Profile | null>(() => {
     try {
       const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
+      // Production authentication is restored only from Supabase, never localStorage.
+      if (env === 'production') return null;
       const saved = localStorage.getItem(getEnvStorageKey(env, 'auth_user'));
       if (saved) return JSON.parse(saved);
       if (env === 'production') {
@@ -908,11 +912,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLessonCloudStatus('saving');
     setLessonCloudMessage('Checking and saving your lesson work…');
     try {
-      const saved = await syncStudentLessons(
-        currentUser,
-        lessonGrades,
-        studentCompletedLessonsMap[currentUser.id] || [],
-      );
+      const ids = legacyStudentIds(currentUser.email, currentUser.id, students);
+      const pending = collectStudentLessons(ids, lessonGrades, studentCompletedLessonsMap);
+      const saved = await syncStudentLessons(currentUser, pending.grades, pending.completed);
       // Only merge. Do not discard unsaved work for other students or this student.
       setLessonGrades(prev => {
         const ids = new Set(prev.map(g => g.id));
@@ -934,7 +936,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
   const backupMyLessonWork = () => {
-    if (currentUser?.role === 'student') downloadStudentLessonBackup(currentUser);
+    if (currentUser?.role === 'student') {
+      const ids = legacyStudentIds(currentUser.email, currentUser.id, students);
+      downloadStudentLessonBackup(currentUser, ids);
+    }
   };
   // After every local grade/completion change, attempt cloud save without clearing local data.
   useEffect(() => {
@@ -953,26 +958,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStudents(prev => {
         const next = [...prev];
         for (const student of remote.students) {
-          const idx = next.findIndex(existing =>
-            existing.profile.email.toLowerCase() === student.profile.email.toLowerCase());
-          if (idx < 0) next.push(student);
-          else {
-            // Keep any existing mastery, but use the verified cloud identity and
-            // the greater completion count rather than overwriting local history.
-            const original = next[idx];
-            next[idx] = {
-              ...original,
-              profile: { ...original.profile, id: student.profile.id, class_id: student.class_id },
-              class_id: student.class_id,
-              lessons_completed: Math.max(original.lessons_completed,student.lessons_completed),
-            };
-          }
+          next.splice(0, next.length, ...mergeCloudStudent(next, student));
         }
         return next;
       });
       setLessonGrades(prev => {
         const ids = new Set(prev.map(g => g.id));
         const incoming = remote.grades.filter(g => !ids.has(g.id));
+        // Update remote IDs by grade ID, without reassigning local historical records.
         return incoming.length ? [...prev, ...incoming] : prev;
       });
     }).catch(error => {
@@ -1660,12 +1653,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, profile: newProfile };
   };
 
+  // Supabase Auth user and its RLS-protected profile are the only authority
+  // for production access. Old roster entries are retained for data recovery.
+  const acceptVerifiedAccount = (profile: Profile) => {
+    if (environment !== 'production') return;
+    setCurrentUser(profile);
+    setRoleState(profile.role);
+    if (profile.role === 'student') {
+      setStudents(prev => mergeCloudStudent(prev, {
+        ...DEFAULT_EMPTY_STUDENT,
+        profile,
+        class_id: profile.class_id || '',
+      }));
+      setActiveStudentId(profile.id);
+      setStudentPageState('dashboard');
+    } else if (profile.role === 'teacher') {
+      setActiveTeacherId(profile.id);
+      setTeacherPageState('dashboard');
+    } else {
+      setAdminPageState('dashboard');
+    }
+  };
+
+  useEffect(() => {
+    if (environment !== 'production') return;
+    const sb = getSupabase();
+    if (!sb) return;
+    let cancelled = false;
+    const restore = async () => {
+      const { data: { user }, error } = await sb.auth.getUser();
+      if (cancelled) return;
+      if (error || !user) { setCurrentUser(null); return; }
+      const { data, error: profileError } = await sb.from('profiles')
+        .select('*').eq('id', user.id).single();
+      if (cancelled) return;
+      if (profileError || !data || data.email?.toLowerCase() !== user.email?.toLowerCase()) {
+        setCurrentUser(null);
+        return;
+      }
+      acceptVerifiedAccount(data as Profile);
+    };
+    void restore();
+    const { data: { subscription } } = sb.auth.onAuthStateChange(() => {
+      void restore();
+    });
+    return () => { cancelled = true; subscription.unsubscribe(); };
+  }, [environment]);
+
   // Unified Smart Sign In (Student, Teacher, or Admin directly from the same portal)
   const loginUser = (
     email: string,
     password?: string,
     _preferredRole?: UserRole
   ): { success: boolean; error?: string } => {
+    if (environment === 'production') {
+      return { success: false, error: 'Production requires verified Supabase sign-in.' };
+    }
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
       return { success: false, error: 'Email address is required.' };
@@ -1819,6 +1862,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sign Out
   const signOut = () => {
+    void getSupabase()?.auth.signOut();
     signOutGoogle();
     setCurrentUser(null);
     setActiveStudentId('');
@@ -2774,6 +2818,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerTeacher,
         registerAdmin,
         loginUser,
+        acceptVerifiedAccount,
         signOut,
         studentPage,
         setStudentPage,
