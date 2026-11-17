@@ -5,6 +5,7 @@ import { StudentSidebar } from './components/common/StudentSidebar';
 import { TeacherSidebar } from './components/common/TeacherSidebar';
 import { AdminSidebar } from './components/common/AdminSidebar';
 import { GoogleAuthModal } from './components/common/GoogleAuthModal';
+import { PasswordRecoveryDialog } from './components/common/PasswordRecoveryDialog';
 
 // Student Views
 import { StudentDashboard } from './components/student/StudentDashboard';
@@ -181,13 +182,14 @@ const AppRoot: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isAuthenticated || !currentUser) {
-    return <LandingPage />;
+    return <><LandingPage /><PasswordRecoveryDialog /></>;
   }
 
   return (
     <>
       <MainContent sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <GoogleAuthModal />
+      <PasswordRecoveryDialog />
     </>
   );
 };
