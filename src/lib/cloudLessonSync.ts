@@ -10,6 +10,7 @@ export async function syncStudentLessons(
   profile: Profile,
   grades: LessonGradeRecord[],
   completedLessonIds: string[],
+  verifiedLegacyIds: string[] = [profile.id],
 ): Promise<{ grades: LessonGradeRecord[]; completed: string[] }> {
   const client = getSupabase();
   if (!client) throw new Error('Cloud storage is not configured.');
@@ -35,7 +36,8 @@ export async function syncStudentLessons(
   if (remoteGradesResult.error) throw remoteGradesResult.error;
   if (remoteProgressResult.error) throw remoteProgressResult.error;
 
-  const ownedGrades = grades.filter(g => g.student_id === profile.id || g.student_id === user.id);
+  const allowedLocalIds = new Set([profile.id, user.id, ...verifiedLegacyIds]);
+  const ownedGrades = grades.filter(g => allowedLocalIds.has(g.student_id));
   // Use stable IDs to make repeated uploads idempotent.
   const alreadyStored = new Set((remoteGradesResult.data || []).map(g => g.id));
   const pendingGrades = ownedGrades.filter(g => !alreadyStored.has(g.id));
@@ -89,7 +91,7 @@ export async function syncStudentLessons(
 }
 
 /** Export only the current user's lesson data; no credentials or other students. */
-export function downloadStudentLessonBackup(profile: Profile): void {
+export function downloadStudentLessonBackup(profile: Profile, legacyIds: string[] = [profile.id]): void {
   const safeParse = (key: string): unknown => {
     try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
   };
@@ -97,11 +99,11 @@ export function downloadStudentLessonBackup(profile: Profile): void {
   const progressKeys = ['bace_student_completed_lessons', 'bace_production_student_completed_lessons'];
   const grades = gradeKeys.flatMap(key => {
     const val = safeParse(key);
-    return Array.isArray(val) ? val.filter(g => g?.student_id === profile.id) : [];
+    return Array.isArray(val) ? val.filter(g => legacyIds.includes(g?.student_id)) : [];
   });
   const completed = progressKeys.flatMap(key => {
     const val = safeParse(key) as Record<string, string[]> | null;
-    return val && Array.isArray(val[profile.id]) ? val[profile.id] : [];
+    return val ? legacyIds.flatMap(id => Array.isArray(val[id]) ? val[id] : []) : [];
   });
   const payload = {
     format: 'bace-student-lessons-v1',
