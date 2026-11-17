@@ -33,7 +33,7 @@ import {
 } from '../data/initialData';
 import { cleanQuestionText } from '../utils/questionUtils';
 import { getSupabase } from '../lib/supabase';
-import { syncStudentLessons, downloadStudentLessonBackup } from '../lib/cloudLessonSync';
+import { syncStudentLessons, downloadStudentLessonBackup, loadInstructorLessonData } from '../lib/cloudLessonSync';
 
 export type StudentNavPage =
   | 'dashboard'
@@ -934,6 +934,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const timer = window.setTimeout(() => { void syncLessonWorkNow(); }, 1200);
     return () => window.clearTimeout(timer);
   }, [environment, currentUser?.id, currentUser?.role, lessonGrades, studentCompletedLessonsMap]);
+
+  // Instructors read authorized submissions from Supabase, not from their
+  // own computer's student roster. Preserve any legacy local records.
+  useEffect(() => {
+    if (environment !== 'production' || !currentUser || !['teacher', 'admin'].includes(currentUser.role)) return;
+    let cancelled = false;
+    void loadInstructorLessonData(currentUser).then(remote => {
+      if (cancelled) return;
+      setStudents(prev => {
+        const next = [...prev];
+        for (const student of remote.students) {
+          const idx = next.findIndex(existing =>
+            existing.profile.email.toLowerCase() === student.profile.email.toLowerCase());
+          if (idx < 0) next.push(student);
+          else {
+            // Keep any existing mastery, but use the verified cloud identity and
+            // the greater completion count rather than overwriting local history.
+            const original = next[idx];
+            next[idx] = {
+              ...original,
+              profile: { ...original.profile, id: student.profile.id, class_id: student.class_id },
+              class_id: student.class_id,
+              lessons_completed: Math.max(original.lessons_completed,student.lessons_completed),
+            };
+          }
+        }
+        return next;
+      });
+      setLessonGrades(prev => {
+        const ids = new Set(prev.map(g => g.id));
+        const incoming = remote.grades.filter(g => !ids.has(g.id));
+        return incoming.length ? [...prev, ...incoming] : prev;
+      });
+    }).catch(error => {
+      console.warn('Instructor cloud records could not be loaded:', error);
+    });
+    return () => { cancelled = true; };
+  }, [environment, currentUser?.id, currentUser?.email, currentUser?.role]);
 
   // Synchronize isolated storage per active environment
   useEffect(() => {
