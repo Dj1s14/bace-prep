@@ -18,7 +18,7 @@
 - No new DB migration or production database write has been performed for this branch.
 
 ## Required tests on an isolated preview URL
-1. Run `npm ci`, `npm run lint`, and `npm run build`. Fix any errors before proceeding.
+1. Run `npm install`, `npm run lint`, and `npm run build` (the repository currently lacks a lockfile; add and commit one before release). Fix any errors before proceeding.
 2. Use a teacher-controlled test student with a verified Supabase Auth identity and a matching `public.profiles` row.
 3. Submit a test lesson grade; ensure the banner becomes **Verified** only after the matching row appears in `public.lesson_grades`, plus a completed row in `public.lesson_progress`.
 4. Reload and sign in on another browser. Grade and lesson completion must be recovered from Supabase.
