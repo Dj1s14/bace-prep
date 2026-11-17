@@ -45,11 +45,12 @@ export async function syncStudentLessons(
   if (pendingGrades.length) {
     const rows = pendingGrades.map(g => ({
       id: g.id, student_id: user.id, student_name: g.student_name || null,
-      lesson_id: g.lesson_id, lesson_title: g.lesson_title || null,
-      domain_id: g.domain_id || null, domain_name: g.domain_name || null,
-      score: g.score, total_questions: g.total_questions,
-      percentage: g.percentage, letter_grade: g.letter_grade || null,
-      status: g.status, submitted_at: g.submitted_at,
+      lesson_id: g.lesson_id, lesson_title: g.lesson_title || 'Lesson Assessment',
+      domain_id: g.domain_id || 'd1', domain_name: g.domain_name || 'BACE Prep',
+      score: g.score ?? 0, total_questions: Math.max(1, g.total_questions || 1),
+      percentage: g.percentage ?? Math.round(100 * (g.score ?? 0) / Math.max(1, g.total_questions || 1)),
+      letter_grade: g.letter_grade || ((g.percentage ?? 0) >= 70 ? 'C' : 'F'),
+      status: g.status || 'Needs Review', submitted_at: g.submitted_at || new Date().toISOString(),
       graded_by: g.graded_by || null,
       teacher_notes: g.student_id !== user.id
         ? [g.teacher_notes, '[Recovered from browser storage; verify historical submission]'].filter(Boolean).join(' ') : g.teacher_notes || null,
