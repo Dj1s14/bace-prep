@@ -682,20 +682,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (env === 'production') return null;
       const saved = localStorage.getItem(getEnvStorageKey(env, 'auth_user'));
       if (saved) return JSON.parse(saved);
-      if (env === 'production') {
-        const legacy = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
-        if (legacy) {
-          const user: Profile = JSON.parse(legacy);
-          if (
-            user.id !== 'stu_demo_wagner_jordan' &&
-            user.id !== 'tch_demo_wagner_martinez' &&
-            user.id !== 'stu_alex' &&
-            user.id !== 't_vance'
-          ) {
-            return user;
-          }
-        }
-      }
       return null;
     } catch {
       return null;
