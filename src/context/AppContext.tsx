@@ -885,7 +885,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Lesson Grades
   const [lessonGrades, setLessonGrades] = useState<LessonGradeRecord[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES);
+    const scoped = loadEnvData<LessonGradeRecord[]>(env, 'lesson_grades', INITIAL_LESSON_GRADES);
+    if (env !== 'production') return scoped;
+    try {
+      // Recover older grades that were only stored under the legacy key.
+      const legacy = JSON.parse(localStorage.getItem(STORAGE_KEYS.LESSON_GRADES) || '[]') as LessonGradeRecord[];
+      const unique = new Map<string, LessonGradeRecord>();
+      for (const record of [...legacy, ...scoped]) if (record?.id) unique.set(record.id, record);
+      return [...unique.values()];
+    } catch { return scoped; }
   });
 
   // Cloud synchronization is additive and NEVER deletes browser history.
