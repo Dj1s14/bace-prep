@@ -1270,10 +1270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const signInWithGoogle = async (preferredRole: UserRole = 'student'): Promise<{ success: boolean; error?: string }> => {
     const sb = getSupabase();
     if (!sb) {
-      const defaultName = preferredRole === 'student' ? 'Student Candidate' : preferredRole === 'teacher' ? 'Faculty Instructor' : 'Administrator';
-      const defaultEmail = preferredRole === 'student' ? 'candidate@biotechprep.edu' : preferredRole === 'teacher' ? 'instructor@biotechprep.edu' : 'admin@biotechprep.edu';
-      oneClickGoogleSignIn(defaultEmail, defaultName, preferredRole);
-      return { success: true };
+      return { success: false, error: 'Secure Google sign-in is unavailable.' };
     }
 
     try {
@@ -1299,6 +1296,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const oneClickGoogleSignIn = (email: string, name: string, preferredRole: UserRole) => {
+    // Never allow typed-in emails to become production identities.
+    if (environment === 'production') return;
     const userInfo: GoogleUserInfo = {
       id: `google_${Date.now().toString(36)}`,
       email,
@@ -1418,6 +1417,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     target_exam_date?: string;
     school_name?: string;
   }): { success: boolean; error?: string; student?: StudentOverview } => {
+    if (environment === 'production') {
+      return { success: false, error: 'Production students must register through Supabase Auth.' };
+    }
     const cleanEmail = data.email.trim().toLowerCase();
     if (students.some((s) => s.profile.email.toLowerCase() === cleanEmail)) {
       return { success: false, error: 'An account with this candidate email already exists. Please sign in.' };
@@ -1509,6 +1511,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     period?: string;
     access_code?: string;
   }): { success: boolean; error?: string; teacher?: TeacherProfile } => {
+    if (environment === 'production' && currentUser?.role !== 'admin') {
+      return { success: false, error: 'Only verified administrators may provision faculty accounts.' };
+    }
     const cleanEmail = data.email.trim().toLowerCase();
     if (teachers.some((t) => t.email.toLowerCase() === cleanEmail)) {
       return { success: false, error: 'A faculty console with this institutional email already exists. Please sign in.' };
@@ -1607,6 +1612,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     department?: string;
     access_code?: string;
   }): { success: boolean; error?: string; profile?: Profile } => {
+    if (environment === 'production') {
+      return { success: false, error: 'Administrator accounts must be provisioned through Supabase.' };
+    }
     const cleanEmail = data.email.trim().toLowerCase();
 
     // Check admin authorization key
