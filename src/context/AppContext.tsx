@@ -33,6 +33,7 @@ import {
 } from '../data/initialData';
 import { cleanQuestionText } from '../utils/questionUtils';
 import { getSupabase } from '../lib/supabase';
+import { syncStudentLessons, downloadStudentLessonBackup } from '../lib/cloudLessonSync';
 
 export type StudentNavPage =
   | 'dashboard'
@@ -96,6 +97,10 @@ interface AppContextType {
   // Authentication & Session
   currentUser: Profile | null;
   isAuthenticated: boolean;
+  lessonCloudStatus: 'idle' | 'saving' | 'saved' | 'error';
+  lessonCloudMessage: string;
+  syncLessonWorkNow: () => Promise<void>;
+  backupMyLessonWork: () => void;
   role: UserRole;
   currentRole: UserRole;
   setRole: (role: UserRole) => void;
@@ -872,6 +877,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
     return loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES);
   });
+
+  // Cloud synchronization is additive and NEVER deletes browser history.
+  // A locally stored account is not a Supabase Auth session. If none exists,
+  // cloud saving is blocked and explicitly reported to the student.
+  const [lessonCloudStatus, setLessonCloudStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lessonCloudMessage, setLessonCloudMessage] = useState('Cloud save has not been verified.');
+  const syncBusy = React.useRef(false);
+  const syncLessonWorkNow = async () => {
+    if (environment !== 'production' || !currentUser || currentUser.role !== 'student' || syncBusy.current) return;
+    syncBusy.current = true;
+    setLessonCloudStatus('saving');
+    setLessonCloudMessage('Checking and saving your lesson work…');
+    try {
+      const saved = await syncStudentLessons(
+        currentUser,
+        lessonGrades,
+        studentCompletedLessonsMap[currentUser.id] || [],
+      );
+      // Only merge. Do not discard unsaved work for other students or this student.
+      setLessonGrades(prev => {
+        const ids = new Set(prev.map(g => g.id));
+        const incoming = saved.grades.filter(g => !ids.has(g.id));
+        return incoming.length ? [...prev, ...incoming] : prev;
+      });
+      setStudentCompletedLessonsMap(prev => {
+        const old = prev[currentUser.id] || [];
+        const merged = [...new Set([...old, ...saved.completed])];
+        return merged.length === old.length ? prev : { ...prev, [currentUser.id]: merged };
+      });
+      setLessonCloudStatus('saved');
+      setLessonCloudMessage('Lesson work verified in Supabase.');
+    } catch (err) {
+      setLessonCloudStatus('error');
+      setLessonCloudMessage(err instanceof Error ? err.message : 'Cloud save failed. Browser copy preserved.');
+    } finally {
+      syncBusy.current = false;
+    }
+  };
+  const backupMyLessonWork = () => {
+    if (currentUser?.role === 'student') downloadStudentLessonBackup(currentUser);
+  };
+  // After every local grade/completion change, attempt cloud save without clearing local data.
+  useEffect(() => {
+    if (environment !== 'production' || currentUser?.role !== 'student') return;
+    const timer = window.setTimeout(() => { void syncLessonWorkNow(); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [environment, currentUser?.id, currentUser?.role, lessonGrades, studentCompletedLessonsMap]);
 
   // Synchronize isolated storage per active environment
   useEffect(() => {
@@ -2651,6 +2703,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetDemoSandbox,
         currentUser,
         isAuthenticated: Boolean(currentUser),
+        lessonCloudStatus,
+        lessonCloudMessage,
+        syncLessonWorkNow,
+        backupMyLessonWork,
         role,
         currentRole: role,
         setRole,
