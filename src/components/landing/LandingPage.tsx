@@ -30,6 +30,7 @@ import { getSupabase } from '../../lib/supabase';
 export const LandingPage: React.FC = () => {
   const {
     loginUser,
+    acceptVerifiedAccount,
     registerStudent,
     registerTeacher,
     registerAdmin,
@@ -87,144 +88,93 @@ export const LandingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // Unified Sign In Handler
+  // Production identities and roles come from Supabase Auth + RLS-protected profiles.
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
-    if (!loginEmail.trim() || !loginPassword.trim()) {
+    const email = loginEmail.trim().toLowerCase();
+    if (!email || !loginPassword) {
       setErrorMsg('Please enter your email and password.');
       return;
     }
-
     setLoading(true);
-    // Cloud authentication happens BEFORE any browser-based legacy session.
-    // Legacy accounts remain accessible for exporting old work, but a missing
-    // Supabase session is explicitly flagged by the lesson save status banner.
-    let cloudError: string | null = null;
-    const client = getSupabase();
-    if (client) {
-      const { error } = await client.auth.signInWithPassword({
-        email: loginEmail.trim().toLowerCase(),
-        password: loginPassword,
-      });
-      cloudError = error?.message || null;
-    } else {
-      cloudError = 'Supabase is not configured.';
-    }
-
-    const res = loginUser(loginEmail.trim(), loginPassword);
-    setLoading(false);
-    if (!res.success) {
-      if (client && !cloudError) await client.auth.signOut();
-      setErrorMsg(res.error || 'Sign-in failed.');
-    } else if (cloudError) {
-      // The student can access old browser work, but must not be told it is backed up.
-      console.warn('Cloud sign-in unavailable; lesson work remains local:', cloudError);
+    try {
+      const sb = getSupabase();
+      if (!sb) throw new Error('Secure login is unavailable. Contact your teacher.');
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: loginPassword });
+      if (error || !data.user) {
+        throw new Error(error?.message || 'Invalid email or password. Use password reset for an existing account.');
+      }
+      const { data: storedProfile, error: profileError } = await sb.from('profiles')
+        .select('*').eq('id', data.user.id).single();
+      if (profileError || !storedProfile ||
+          storedProfile.email?.toLowerCase() !== data.user.email?.toLowerCase()) {
+        await sb.auth.signOut();
+        throw new Error('Your cloud account needs a verified profile. Contact your teacher.');
+      }
+      acceptVerifiedAccount(storedProfile);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Secure login failed.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Student Registration Handler
-  const handleStudentSignUp = (e: React.FormEvent) => {
+  const handleStudentSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
-
-    if (!sFirstName.trim() || !sLastName.trim() || !sEmail.trim()) {
-      setErrorMsg('Please complete all required student fields.');
+    const email = sEmail.trim().toLowerCase();
+    if (!sFirstName.trim() || !sLastName.trim() || !email) {
+      setErrorMsg('Please complete the required student fields.');
       return;
     }
-    if (!sPassword || sPassword.length < 4) {
-      setErrorMsg('Password must be at least 4 characters long.');
+    if (sPassword.length < 8) {
+      setErrorMsg('Use a password with at least 8 characters.');
       return;
     }
-
     setLoading(true);
-    const res = registerStudent({
-      first_name: sFirstName.trim(),
-      last_name: sLastName.trim(),
-      email: sEmail.trim(),
-      password: sPassword,
-      class_join_code: sJoinCode.trim() || undefined,
-      target_exam_date: sExamDate,
-    });
-    setLoading(false);
-
-    if (!res.success && res.error) {
-      setErrorMsg(res.error);
+    try {
+      const sb = getSupabase();
+      if (!sb) throw new Error('Student registration is unavailable.');
+      const { data, error } = await sb.auth.signUp({
+        email, password: sPassword,
+        options: { data: { first_name: sFirstName.trim(), last_name: sLastName.trim() } },
+      });
+      if (error) throw error;
+      if (!data.user || !data.session) {
+        setSuccessMsg('Account requested. Verify your email, then sign in. Your teacher can assign your class.');
+        return;
+      }
+      const { data: savedProfile, error: profileError } = await sb.from('profiles')
+        .upsert({
+          id: data.user.id, email,
+          first_name: sFirstName.trim(), last_name: sLastName.trim(),
+          role: 'student', class_id: null,
+        }, { onConflict: 'id' }).select('*').single();
+      if (profileError || !savedProfile) {
+        throw new Error('Account created but student profile setup failed. Contact your teacher.');
+      }
+      acceptVerifiedAccount(savedProfile);
+      setSuccessMsg('Secure student account created. Your teacher can assign your class.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Registration failed.');
+    } finally {
+      setLoading(false);
     }
   };
 
   // Teacher Registration Handler
   const handleTeacherSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    if (!tFirstName.trim() || !tLastName.trim() || !tEmail.trim()) {
-      setErrorMsg('Please complete all required faculty fields.');
-      return;
-    }
-    if (!tPassword || tPassword.length < 6) {
-      setErrorMsg('Faculty password must be at least 6 characters long.');
-      return;
-    }
-    if (!tAccessCode.trim()) {
-      setErrorMsg('Faculty Authorization Key is required. Contact CTE administration.');
-      return;
-    }
-
-    setLoading(true);
-    const res = registerTeacher({
-      prefix: tPrefix,
-      first_name: tFirstName.trim(),
-      last_name: tLastName.trim(),
-      email: tEmail.trim(),
-      password: tPassword,
-      school_name: tSchool.trim(),
-      department: tDepartment.trim(),
-      access_code: tAccessCode.trim(),
-    });
-    setLoading(false);
-
-    if (!res.success && res.error) {
-      setErrorMsg(res.error);
-    }
+    setErrorMsg('Teachers must be provisioned by an administrator through Supabase.');
   };
 
   // Admin Registration Handler
   const handleAdminSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    if (!aFirstName.trim() || !aLastName.trim() || !aEmail.trim()) {
-      setErrorMsg('Please complete all required administrator fields.');
-      return;
-    }
-    if (!aPassword || aPassword.length < 6) {
-      setErrorMsg('Administrator password must be at least 6 characters long.');
-      return;
-    }
-    if (!aAccessCode.trim()) {
-      setErrorMsg('District Administrator Master Key is required.');
-      return;
-    }
-
-    setLoading(true);
-    const res = registerAdmin({
-      first_name: aFirstName.trim(),
-      last_name: aLastName.trim(),
-      email: aEmail.trim(),
-      password: aPassword,
-      school_name: aSchool.trim(),
-      department: aDepartment.trim(),
-      access_code: aAccessCode.trim(),
-    });
-    setLoading(false);
-
-    if (!res.success && res.error) {
-      setErrorMsg(res.error);
-    }
+    setErrorMsg('Administrator accounts must be provisioned through Supabase.');
   };
 
   const returnToActiveDashboard = () => {
