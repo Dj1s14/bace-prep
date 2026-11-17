@@ -160,7 +160,7 @@ export async function loadInstructorLessonData(profile: Profile): Promise<{
   const [visibleProfiles, visibleGrades, visibleProgress] = await Promise.all([
     readAll('profiles', 'id,email,first_name,last_name,role,class_id,created_at', true),
     readAll('lesson_grades', '*'),
-    readAll('lesson_progress', 'student_id,lesson_id'),
+    readAll('lesson_progress', 'student_id,lesson_id,completed'),
   ]);
   const completionCount = new Map<string,Set<string>>();
   for (const p of visibleProgress) {
