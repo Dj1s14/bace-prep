@@ -958,10 +958,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return next;
       });
       setLessonGrades(prev => {
-        const ids = new Set(prev.map(g => g.id));
+        // Match old teacher-browser roster IDs to canonical Supabase identities.
+        const canonicalByOldId = new Map<string, string>();
+        for (const oldStudent of students) {
+          const cloudStudent = remote.students.find(s =>
+            s.profile.email.toLowerCase() === oldStudent.profile.email.toLowerCase());
+          if (cloudStudent) canonicalByOldId.set(oldStudent.profile.id, cloudStudent.profile.id);
+        }
+        const normalized = prev.map(g => {
+          const target = canonicalByOldId.get(g.student_id);
+          return target && target !== g.student_id
+            ? { ...g, student_id: target,
+                teacher_notes: [g.teacher_notes, '[Local historical grade; verify before relying on this record]'].filter(Boolean).join(' ') }
+            : g;
+        });
+        const ids = new Set(normalized.map(g => g.id));
         const incoming = remote.grades.filter(g => !ids.has(g.id));
-        // Update remote IDs by grade ID, without reassigning local historical records.
-        return incoming.length ? [...prev, ...incoming] : prev;
+        return [...normalized, ...incoming];
       });
     }).catch(error => {
       console.warn('Instructor cloud records could not be loaded:', error);
