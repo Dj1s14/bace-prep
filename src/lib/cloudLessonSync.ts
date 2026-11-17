@@ -11,8 +11,9 @@ export async function syncStudentLessons(
   grades: LessonGradeRecord[],
   completedLessonIds: string[],
   verifiedLegacyIds: string[] = [profile.id],
+  clientOverride?: ReturnType<typeof getSupabase>,
 ): Promise<{ grades: LessonGradeRecord[]; completed: string[] }> {
-  const client = getSupabase();
+  const client = clientOverride ?? getSupabase();
   if (!client) throw new Error('Cloud storage is not configured.');
   const { data: userData, error: authError } = await client.auth.getUser();
   const user = userData.user;
@@ -49,7 +50,9 @@ export async function syncStudentLessons(
       score: g.score, total_questions: g.total_questions,
       percentage: g.percentage, letter_grade: g.letter_grade || null,
       status: g.status, submitted_at: g.submitted_at,
-      graded_by: g.graded_by || null, teacher_notes: g.teacher_notes || null,
+      graded_by: g.graded_by || null,
+      teacher_notes: g.student_id !== user.id
+        ? [g.teacher_notes, '[Recovered from browser storage; verify historical submission]'].filter(Boolean).join(' ') : g.teacher_notes || null,
       teacher_feedback: g.teacher_feedback || null,
     }));
     const { error } = await client.from('lesson_grades').insert(rows);
