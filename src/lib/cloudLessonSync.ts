@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { LessonGradeRecord, Profile } from '../types/database';
+import type { LessonGradeRecord, Profile, StudentOverview } from '../types/database';
 
 /**
  * Cloud sync only ever writes under a Supabase-authenticated student's identity.
@@ -118,4 +118,49 @@ export function downloadStudentLessonBackup(profile: Profile): void {
   anchor.download = 'bace-lesson-backup.json';
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+/** Read only instructor-authorized students and their cloud-submitted lessons. RLS
+ * is the source of authorization; never trust the local role by itself. */
+export async function loadInstructorLessonData(profile: Profile): Promise<{
+  students: StudentOverview[];
+  grades: LessonGradeRecord[];
+}> {
+  const client = getSupabase();
+  if (!client) throw new Error('Cloud storage unavailable');
+  const { data: { user }, error: authError } = await client.auth.getUser();
+  if (authError || !user || user.email?.toLowerCase() !== profile.email.toLowerCase()) {
+    throw new Error('Sign in with your verified school account to view cloud grades.');
+  }
+  const { data: remoteProfile, error: roleError } = await client.from('profiles')
+    .select('role').eq('id', user.id).single();
+  if (roleError || !['teacher','admin'].includes(remoteProfile?.role || '')) {
+    throw new Error('Your Supabase account is not authorized for instructor grade access.');
+  }
+  const [profilesResult, gradesResult, progressResult] = await Promise.all([
+    client.from('profiles').select('id,email,first_name,last_name,role,class_id,created_at').eq('role', 'student'),
+    client.from('lesson_grades').select('*'),
+    client.from('lesson_progress').select('student_id,lesson_id').eq('completed',true),
+  ]);
+  if (profilesResult.error) throw profilesResult.error;
+  if (gradesResult.error) throw gradesResult.error;
+  if (progressResult.error) throw progressResult.error;
+  const completionCount = new Map<string,Set<string>>();
+  for (const p of progressResult.data || []) {
+    if (!completionCount.has(p.student_id)) completionCount.set(p.student_id, new Set());
+    completionCount.get(p.student_id)!.add(p.lesson_id);
+  }
+  const students: StudentOverview[] = (profilesResult.data || []).map(p => ({
+    profile: {
+      id:p.id, email:p.email,first_name:p.first_name,last_name:p.last_name,
+      role:'student',class_id:p.class_id || '',created_at:p.created_at,
+    },
+    class_id:p.class_id || '', overall_readiness:0,
+    domain_mastery:{ d1:0,d2:0,d3:0,d4:0,d5:0,d6:0,d7:0,d8:0 },
+    last_active:'Cloud account', status:'Needs Review',
+    lessons_completed:completionCount.get(p.id)?.size || 0,
+    questions_attempted:0, accuracy:0,mock_exam_scores:[],
+    weakest_topics:[],strongest_topics:[],recent_activities:[],
+  }));
+  return { students, grades:(gradesResult.data || []) as LessonGradeRecord[] };
 }
