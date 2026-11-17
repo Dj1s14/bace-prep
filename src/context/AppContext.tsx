@@ -914,7 +914,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const ids = legacyStudentIds(currentUser.email, currentUser.id, students);
       const pending = collectStudentLessons(ids, lessonGrades, studentCompletedLessonsMap);
-      const saved = await syncStudentLessons(currentUser, pending.grades, pending.completed);
+      const saved = await syncStudentLessons(currentUser, pending.grades, pending.completed, ids);
       // Only merge. Do not discard unsaved work for other students or this student.
       setLessonGrades(prev => {
         const ids = new Set(prev.map(g => g.id));
