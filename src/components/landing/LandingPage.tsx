@@ -106,12 +106,31 @@ export const LandingPage: React.FC = () => {
       if (error || !data.user) {
         throw new Error(error?.message || 'Invalid email or password. Use password reset for an existing account.');
       }
-      const { data: storedProfile, error: profileError } = await sb.from('profiles')
-        .select('*').eq('id', data.user.id).single();
-      if (profileError || !storedProfile ||
-          storedProfile.email?.toLowerCase() !== data.user.email?.toLowerCase()) {
+      const { data: existingProfile, error: profileError } = await sb.from('profiles')
+        .select('*').eq('id', data.user.id).maybeSingle();
+      if (profileError) throw profileError;
+      let storedProfile = existingProfile;
+      // A signup that required email confirmation could not create its profile
+      // until Supabase provided a real authenticated session. Self-registration
+      // is ALWAYS a student role; faculty roles are admin-provisioned.
+      if (!storedProfile) {
+        const verifiedEmail = data.user.email?.toLowerCase();
+        if (!verifiedEmail || verifiedEmail !== email) throw new Error('Verified email mismatch.');
+        const firstName = String(data.user.user_metadata?.first_name || 'Student');
+        const lastName = String(data.user.user_metadata?.last_name || 'Candidate');
+        const created = await sb.from('profiles').insert({
+          id:data.user.id, email:verifiedEmail, first_name:firstName,
+          last_name:lastName, role:'student', class_id:null,
+        }).select('*').single();
+        if (created.error || !created.data) {
+          await sb.auth.signOut();
+          throw new Error('Your student profile could not be created. Contact your teacher.');
+        }
+        storedProfile = created.data;
+      }
+      if (storedProfile.email?.toLowerCase() !== data.user.email?.toLowerCase()) {
         await sb.auth.signOut();
-        throw new Error('Your cloud account needs a verified profile. Contact your teacher.');
+        throw new Error('Your account email does not match its profile. Contact your teacher.');
       }
       acceptVerifiedAccount(storedProfile);
     } catch (err) {
