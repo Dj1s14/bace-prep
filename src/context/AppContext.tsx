@@ -33,6 +33,8 @@ import {
 } from '../data/initialData';
 import { cleanQuestionText } from '../utils/questionUtils';
 import { getSupabase } from '../lib/supabase';
+import { syncStudentLessons, downloadStudentLessonBackup, loadInstructorLessonData } from '../lib/cloudLessonSync';
+import { legacyStudentIds, collectStudentLessons, mergeCloudStudent } from '../lib/lessonIdentity';
 
 export type StudentNavPage =
   | 'dashboard'
@@ -96,6 +98,10 @@ interface AppContextType {
   // Authentication & Session
   currentUser: Profile | null;
   isAuthenticated: boolean;
+  lessonCloudStatus: 'idle' | 'saving' | 'saved' | 'error';
+  lessonCloudMessage: string;
+  syncLessonWorkNow: () => Promise<void>;
+  backupMyLessonWork: () => void;
   role: UserRole;
   currentRole: UserRole;
   setRole: (role: UserRole) => void;
@@ -130,6 +136,7 @@ interface AppContextType {
     access_code?: string;
   }) => { success: boolean; error?: string; profile?: Profile };
   loginUser: (email: string, password?: string, preferredRole?: UserRole) => { success: boolean; error?: string };
+  acceptVerifiedAccount: (profile: Profile) => void;
   signOut: () => void;
 
   // Faculty Access Code Security
@@ -671,22 +678,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<Profile | null>(() => {
     try {
       const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
+      // Production authentication is restored only from Supabase, never localStorage.
+      if (env === 'production') return null;
       const saved = localStorage.getItem(getEnvStorageKey(env, 'auth_user'));
       if (saved) return JSON.parse(saved);
-      if (env === 'production') {
-        const legacy = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
-        if (legacy) {
-          const user: Profile = JSON.parse(legacy);
-          if (
-            user.id !== 'stu_demo_wagner_jordan' &&
-            user.id !== 'tch_demo_wagner_martinez' &&
-            user.id !== 'stu_alex' &&
-            user.id !== 't_vance'
-          ) {
-            return user;
-          }
-        }
-      }
       return null;
     } catch {
       return null;
@@ -855,7 +850,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [studentCompletedLessonsMap, setStudentCompletedLessonsMap] = useState<Record<string, string[]>>(() => {
     try {
       const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-      return loadEnvData(env, 'student_completed_lessons', {});
+      const environmentRecords = loadEnvData<Record<string, string[]>>(env, 'student_completed_lessons', {});
+      // Older versions wrote completions to the unscoped key only.
+      // Merge both copies; never replace an existing student's completed work.
+      if (env !== 'production') return environmentRecords;
+      const legacyRaw = localStorage.getItem(STORAGE_KEYS.STUDENT_COMPLETED_LESSONS);
+      const legacyRecords = legacyRaw ? JSON.parse(legacyRaw) as Record<string, string[]> : {};
+      const merged = { ...legacyRecords, ...environmentRecords };
+      for (const studentId of new Set([...Object.keys(legacyRecords), ...Object.keys(environmentRecords)])) {
+        merged[studentId] = [...new Set([...(legacyRecords[studentId] || []), ...(environmentRecords[studentId] || [])])];
+      }
+      return merged;
     } catch {
       return {};
     }
@@ -870,8 +875,112 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Lesson Grades
   const [lessonGrades, setLessonGrades] = useState<LessonGradeRecord[]>(() => {
     const env = (localStorage.getItem('bace_app_environment') as AppEnvironment) || 'production';
-    return loadEnvData(env, 'lesson_grades', INITIAL_LESSON_GRADES);
+    const scoped = loadEnvData<LessonGradeRecord[]>(env, 'lesson_grades', INITIAL_LESSON_GRADES);
+    if (env !== 'production') return scoped;
+    try {
+      // Recover older grades that were only stored under the legacy key.
+      const legacy = JSON.parse(localStorage.getItem(STORAGE_KEYS.LESSON_GRADES) || '[]') as LessonGradeRecord[];
+      const unique = new Map<string, LessonGradeRecord>();
+      for (const record of [...legacy, ...scoped]) if (record?.id) unique.set(record.id, record);
+      return [...unique.values()];
+    } catch { return scoped; }
   });
+
+  // Cloud synchronization is additive and NEVER deletes browser history.
+  // A locally stored account is not a Supabase Auth session. If none exists,
+  // cloud saving is blocked and explicitly reported to the student.
+  const [lessonCloudStatus, setLessonCloudStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lessonCloudMessage, setLessonCloudMessage] = useState('Cloud save has not been verified.');
+  const syncBusy = React.useRef(false);
+  const syncPending = React.useRef(false);
+  const latestLessonState = React.useRef({ currentUser, students, lessonGrades, studentCompletedLessonsMap });
+  latestLessonState.current = { currentUser, students, lessonGrades, studentCompletedLessonsMap };
+  const syncLessonWorkNow = async () => {
+    const latest = latestLessonState.current;
+    if (environment !== 'production' || !latest.currentUser || latest.currentUser.role !== 'student') return;
+    if (syncBusy.current) { syncPending.current = true; return; }
+    syncBusy.current = true;
+    setLessonCloudStatus('saving');
+    setLessonCloudMessage('Checking and saving your lesson work…');
+    try {
+      const ids = legacyStudentIds(latest.currentUser.email, latest.currentUser.id, latest.students);
+      const pending = collectStudentLessons(ids, latest.lessonGrades, latest.studentCompletedLessonsMap);
+      const saved = await syncStudentLessons(latest.currentUser, pending.grades, pending.completed, ids);
+      // Only merge. Do not discard unsaved work for other students or this student.
+      setLessonGrades(prev => {
+        const ids = new Set(prev.map(g => g.id));
+        const incoming = saved.grades.filter(g => !ids.has(g.id));
+        return incoming.length ? [...prev, ...incoming] : prev;
+      });
+      setStudentCompletedLessonsMap(prev => {
+        const old = prev[latest.currentUser.id] || [];
+        const merged = [...new Set([...old, ...saved.completed])];
+        return merged.length === old.length ? prev : { ...prev, [latest.currentUser.id]: merged };
+      });
+      setLessonCloudStatus('saved');
+      setLessonCloudMessage('Lesson work verified in Supabase.');
+    } catch (err) {
+      setLessonCloudStatus('error');
+      setLessonCloudMessage(err instanceof Error ? err.message : 'Cloud save failed. Browser copy preserved.');
+    } finally {
+      syncBusy.current = false;
+      if (syncPending.current) {
+        syncPending.current = false;
+        void syncLessonWorkNow();
+      }
+    }
+  };
+  const backupMyLessonWork = () => {
+    if (currentUser?.role === 'student') {
+      const ids = legacyStudentIds(currentUser.email, currentUser.id, students);
+      downloadStudentLessonBackup(currentUser, ids);
+    }
+  };
+  // After every local grade/completion change, attempt cloud save without clearing local data.
+  useEffect(() => {
+    if (environment !== 'production' || currentUser?.role !== 'student') return;
+    const timer = window.setTimeout(() => { void syncLessonWorkNow(); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [environment, currentUser?.id, currentUser?.role, lessonGrades, studentCompletedLessonsMap]);
+
+  // Instructors read authorized submissions from Supabase, not from their
+  // own computer's student roster. Preserve any legacy local records.
+  useEffect(() => {
+    if (environment !== 'production' || !currentUser || !['teacher', 'admin'].includes(currentUser.role)) return;
+    let cancelled = false;
+    void loadInstructorLessonData(currentUser).then(remote => {
+      if (cancelled) return;
+      setStudents(prev => {
+        const next = [...prev];
+        for (const student of remote.students) {
+          next.splice(0, next.length, ...mergeCloudStudent(next, student));
+        }
+        return next;
+      });
+      setLessonGrades(prev => {
+        // Match old teacher-browser roster IDs to canonical Supabase identities.
+        const canonicalByOldId = new Map<string, string>();
+        for (const oldStudent of students) {
+          const cloudStudent = remote.students.find(s =>
+            s.profile.email.toLowerCase() === oldStudent.profile.email.toLowerCase());
+          if (cloudStudent) canonicalByOldId.set(oldStudent.profile.id, cloudStudent.profile.id);
+        }
+        const normalized = prev.map(g => {
+          const target = canonicalByOldId.get(g.student_id);
+          return target && target !== g.student_id
+            ? { ...g, student_id: target,
+                teacher_notes: [g.teacher_notes, '[Local historical grade; verify before relying on this record]'].filter(Boolean).join(' ') }
+            : g;
+        });
+        const ids = new Set(normalized.map(g => g.id));
+        const incoming = remote.grades.filter(g => !ids.has(g.id));
+        return [...normalized, ...incoming];
+      });
+    }).catch(error => {
+      console.warn('Instructor cloud records could not be loaded:', error);
+    });
+    return () => { cancelled = true; };
+  }, [environment, currentUser?.id, currentUser?.email, currentUser?.role]);
 
   // Synchronize isolated storage per active environment
   useEffect(() => {
@@ -1041,8 +1150,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [assignmentProgress]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.STUDENT_COMPLETED_LESSONS, JSON.stringify(studentCompletedLessonsMap));
-  }, [studentCompletedLessonsMap]);
+    // Save both storage formats during transition for lossless recovery.
+    saveEnvData(environment, 'student_completed_lessons', studentCompletedLessonsMap);
+    if (environment === 'production') {
+      localStorage.setItem(STORAGE_KEYS.STUDENT_COMPLETED_LESSONS, JSON.stringify(studentCompletedLessonsMap));
+    }
+  }, [studentCompletedLessonsMap, environment]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ACTIVITY_SESSIONS, JSON.stringify(activitySessions));
@@ -1165,10 +1278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const signInWithGoogle = async (preferredRole: UserRole = 'student'): Promise<{ success: boolean; error?: string }> => {
     const sb = getSupabase();
     if (!sb) {
-      const defaultName = preferredRole === 'student' ? 'Student Candidate' : preferredRole === 'teacher' ? 'Faculty Instructor' : 'Administrator';
-      const defaultEmail = preferredRole === 'student' ? 'candidate@biotechprep.edu' : preferredRole === 'teacher' ? 'instructor@biotechprep.edu' : 'admin@biotechprep.edu';
-      oneClickGoogleSignIn(defaultEmail, defaultName, preferredRole);
-      return { success: true };
+      return { success: false, error: 'Secure Google sign-in is unavailable.' };
     }
 
     try {
@@ -1194,6 +1304,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const oneClickGoogleSignIn = (email: string, name: string, preferredRole: UserRole) => {
+    // Never allow typed-in emails to become production identities.
+    if (environment === 'production') return;
     const userInfo: GoogleUserInfo = {
       id: `google_${Date.now().toString(36)}`,
       email,
@@ -1313,6 +1425,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     target_exam_date?: string;
     school_name?: string;
   }): { success: boolean; error?: string; student?: StudentOverview } => {
+    if (environment === 'production') {
+      return { success: false, error: 'Production students must register through Supabase Auth.' };
+    }
     const cleanEmail = data.email.trim().toLowerCase();
     if (students.some((s) => s.profile.email.toLowerCase() === cleanEmail)) {
       return { success: false, error: 'An account with this candidate email already exists. Please sign in.' };
@@ -1404,6 +1519,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     period?: string;
     access_code?: string;
   }): { success: boolean; error?: string; teacher?: TeacherProfile } => {
+    if (environment === 'production' && currentUser?.role !== 'admin') {
+      return { success: false, error: 'Only verified administrators may provision faculty accounts.' };
+    }
     const cleanEmail = data.email.trim().toLowerCase();
     if (teachers.some((t) => t.email.toLowerCase() === cleanEmail)) {
       return { success: false, error: 'A faculty console with this institutional email already exists. Please sign in.' };
@@ -1502,6 +1620,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     department?: string;
     access_code?: string;
   }): { success: boolean; error?: string; profile?: Profile } => {
+    if (environment === 'production') {
+      return { success: false, error: 'Administrator accounts must be provisioned through Supabase.' };
+    }
     const cleanEmail = data.email.trim().toLowerCase();
 
     // Check admin authorization key
@@ -1548,12 +1669,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, profile: newProfile };
   };
 
+  // Supabase Auth user and its RLS-protected profile are the only authority
+  // for production access. Old roster entries are retained for data recovery.
+  const acceptVerifiedAccount = (profile: Profile) => {
+    if (environment !== 'production') return;
+    if (profile.role === 'student') {
+      const knownIds = legacyStudentIds(profile.email, profile.id, students);
+      setLessonGrades(prev => prev.map(g => knownIds.includes(g.student_id) && g.student_id !== profile.id
+        ? { ...g, student_id: profile.id,
+          teacher_notes: [g.teacher_notes, '[Recovered from browser storage; verify historical submission]'].filter(Boolean).join(' '),
+        } : g));
+    }
+    setCurrentUser(profile);
+    setRoleState(profile.role);
+    if (profile.role === 'student') {
+      setStudents(prev => mergeCloudStudent(prev, {
+        ...DEFAULT_EMPTY_STUDENT,
+        profile,
+        class_id: profile.class_id || '',
+      }));
+      setActiveStudentId(profile.id);
+      setStudentPageState('dashboard');
+    } else if (profile.role === 'teacher') {
+      setActiveTeacherId(profile.id);
+      setTeacherPageState('dashboard');
+    } else {
+      setAdminPageState('dashboard');
+    }
+  };
+
+  useEffect(() => {
+    if (environment !== 'production') return;
+    const sb = getSupabase();
+    if (!sb) return;
+    let cancelled = false;
+    const restore = async () => {
+      const { data: { user }, error } = await sb.auth.getUser();
+      if (cancelled) return;
+      if (error || !user) { setCurrentUser(null); return; }
+      const { data, error: profileError } = await sb.from('profiles')
+        .select('*').eq('id', user.id).single();
+      if (cancelled) return;
+      if (profileError || !data || data.email?.toLowerCase() !== user.email?.toLowerCase()) {
+        setCurrentUser(null);
+        return;
+      }
+      acceptVerifiedAccount(data as Profile);
+    };
+    void restore();
+    const { data: { subscription } } = sb.auth.onAuthStateChange(() => {
+      // Avoid a nested Auth request inside Supabase's auth-change lock.
+      window.setTimeout(() => { if (!cancelled) void restore(); }, 0);
+    });
+    return () => { cancelled = true; subscription.unsubscribe(); };
+  }, [environment]);
+
   // Unified Smart Sign In (Student, Teacher, or Admin directly from the same portal)
   const loginUser = (
     email: string,
     password?: string,
     _preferredRole?: UserRole
   ): { success: boolean; error?: string } => {
+    if (environment === 'production') {
+      return { success: false, error: 'Production requires verified Supabase sign-in.' };
+    }
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
       return { success: false, error: 'Email address is required.' };
@@ -1707,6 +1886,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sign Out
   const signOut = () => {
+    void getSupabase()?.auth.signOut();
     signOutGoogle();
     setCurrentUser(null);
     setActiveStudentId('');
@@ -2651,6 +2831,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetDemoSandbox,
         currentUser,
         isAuthenticated: Boolean(currentUser),
+        lessonCloudStatus,
+        lessonCloudMessage,
+        syncLessonWorkNow,
+        backupMyLessonWork,
         role,
         currentRole: role,
         setRole,
@@ -2658,6 +2842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerTeacher,
         registerAdmin,
         loginUser,
+        acceptVerifiedAccount,
         signOut,
         studentPage,
         setStudentPage,

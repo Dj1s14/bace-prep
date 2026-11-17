@@ -5,6 +5,7 @@ import { StudentSidebar } from './components/common/StudentSidebar';
 import { TeacherSidebar } from './components/common/TeacherSidebar';
 import { AdminSidebar } from './components/common/AdminSidebar';
 import { GoogleAuthModal } from './components/common/GoogleAuthModal';
+import { PasswordRecoveryDialog } from './components/common/PasswordRecoveryDialog';
 
 // Student Views
 import { StudentDashboard } from './components/student/StudentDashboard';
@@ -40,6 +41,10 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
     role,
     currentRole: cr,
     currentUser,
+    lessonCloudStatus,
+    lessonCloudMessage,
+    syncLessonWorkNow,
+    backupMyLessonWork,
     isFacultyPreviewingStudent,
     returnToFacultyConsole,
     studentPage,
@@ -137,6 +142,14 @@ const MainContent: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (o: boolean)
         </div>
       )}
 
+      {currentRole === 'student' && (
+        <div role="status" aria-live="polite" className={`px-4 py-2 text-xs flex flex-wrap items-center gap-3 border-b ${lessonCloudStatus === 'saved' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : lessonCloudStatus === 'saving' ? 'bg-blue-50 text-blue-900 border-blue-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}>
+          <span className="font-semibold">Lesson cloud save: {lessonCloudStatus === 'saved' ? 'Verified' : lessonCloudStatus === 'saving' ? 'Saving…' : 'Not verified'}</span>
+          <span>{lessonCloudMessage}</span>
+          <button type="button" className="underline font-semibold" onClick={() => void syncLessonWorkNow()}>Retry cloud save</button>
+          <button type="button" className="underline font-semibold" onClick={backupMyLessonWork}>Back up my lesson work</button>
+        </div>
+      )}
       <div className="flex-1 flex overflow-hidden">
         {!isTakingExam && currentRole === 'student' && (
           <StudentSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -169,13 +182,14 @@ const AppRoot: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isAuthenticated || !currentUser) {
-    return <LandingPage />;
+    return <><LandingPage /><PasswordRecoveryDialog /></>;
   }
 
   return (
     <>
       <MainContent sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <GoogleAuthModal />
+      <PasswordRecoveryDialog />
     </>
   );
 };

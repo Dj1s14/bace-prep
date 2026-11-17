@@ -3,9 +3,9 @@ import { Question, Assignment, LessonGradeRecord } from '../types/database';
 
 // Safe environment variable resolution with fallback to user's provided credentials
 export const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || 'https://gfdbcrfqbsowlbnprqqn.supabase.co';
+  import.meta.env?.VITE_SUPABASE_URL || 'https://gfdbcrfqbsowlbnprqqn.supabase.co';
 export const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZGJjcmZxYnNvd2xibnBycXFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMTQ2NzgsImV4cCI6MjEwNDc5MDY3OH0.sW9iok1K2DWIThYfJIsQIDnu26r5Xh3L7p-6i4xUyQs';
 
 let supabaseClient: SupabaseClient | null = null;
