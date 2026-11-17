@@ -414,6 +414,26 @@ export const LandingPage: React.FC = () => {
                       )}
                     </button>
 
+                    <button type="button" disabled={loading}
+                      onClick={async () => {
+                        setErrorMsg(null);
+                        const email = loginEmail.trim().toLowerCase();
+                        if (!email) { setErrorMsg('Enter your school email above first.'); return; }
+                        const sb = getSupabase();
+                        if (!sb) { setErrorMsg('Password reset is unavailable.'); return; }
+                        setLoading(true);
+                        const { error } = await sb.auth.resetPasswordForEmail(email, {
+                          redirectTo: window.location.origin + window.location.pathname,
+                        });
+                        setLoading(false);
+                        if (error) setErrorMsg(error.message);
+                        else setSuccessMsg('If this account exists, a password reset message has been sent to your email.');
+                      }}
+                      className="w-full text-xs text-teal-400 hover:text-teal-300 underline"
+                    >
+                      Forgot your password? Reset through Supabase
+                    </button>
+
                     <p className="text-[11px] text-slate-400 text-center pt-2 leading-relaxed">
                       Your credentials automatically log you directly into your student candidate, faculty educator, or administrator workspace.
                     </p>
